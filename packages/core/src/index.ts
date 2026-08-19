@@ -28,3 +28,9 @@ export {
   SoftSurface,
   type SoftSurfaceOptions,
 } from "./SoftSurface.js";
+
+export {
+  MATERIAL_PRESETS,
+  type MaterialParameters,
+  type SoftSurfacePreset,
+} from "./MaterialPresets.js";

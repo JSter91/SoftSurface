@@ -105,3 +105,15 @@ describe("SoftSurface", () => {
     ).toThrow();
   });
 });
+
+it("accepts material presets", () => {
+  const surface = new SoftSurface({
+    width: 2,
+    height: 2,
+    segmentsX: 2,
+    segmentsY: 2,
+    preset: "silk",
+  });
+
+  expect(surface.particleCount).toBe(9);
+});

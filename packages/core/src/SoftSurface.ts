@@ -18,8 +18,11 @@ import {
   type VerletIntegratorOptions,
 } from "./VerletIntegrator.js";
 
+import { MATERIAL_PRESETS, type SoftSurfacePreset } from "./MaterialPresets.js";
+
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
+  preset?: SoftSurfacePreset;
   damping?: VerletIntegratorOptions["damping"];
   acceleration?: VerletIntegratorOptions["acceleration"];
   iterations?: ConstraintSolverOptions["iterations"];
@@ -40,6 +43,17 @@ export class SoftSurface {
   private accumulator = 0;
 
   constructor(options: SoftSurfaceOptions) {
+    const preset = MATERIAL_PRESETS[options.preset ?? "cloth"];
+
+    const structuralStiffness =
+      options.structuralStiffness ?? preset.structuralStiffness;
+
+    const shearStiffness = options.shearStiffness ?? preset.shearStiffness;
+
+    const bendStiffness = options.bendStiffness ?? preset.bendStiffness;
+
+    const damping = options.damping ?? preset.damping;
+
     this.grid = new ParticleGrid({
       width: options.width,
       height: options.height,
@@ -48,13 +62,13 @@ export class SoftSurface {
     });
 
     this.constraints = createGridConstraints(this.grid, {
-      structuralStiffness: options.structuralStiffness,
-      shearStiffness: options.shearStiffness,
-      bendStiffness: options.bendStiffness,
+      structuralStiffness: structuralStiffness,
+      shearStiffness: shearStiffness,
+      bendStiffness: bendStiffness,
     });
 
     this.integrator = new VerletIntegrator({
-      damping: options.damping,
+      damping: damping,
       acceleration: options.acceleration,
     });
 
@@ -120,7 +134,7 @@ export class SoftSurface {
 
     this.solver.solve(this.grid, this.constraints);
   }
-  
+
   pin(particleIndex: number): void {
     this.assertParticleIndex(particleIndex);
 
