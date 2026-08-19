@@ -55,4 +55,53 @@ describe("SoftSurface", () => {
 
     expect(surface.inverseMasses[0]).toBe(1);
   });
+
+  it("produces the same result independently of render frame rate", () => {
+    const options = {
+      width: 2,
+      height: 2,
+      segmentsX: 2,
+      segmentsY: 2,
+      acceleration: [0, -10, 0] as const,
+      damping: 0,
+      fixedTimeStep: 1 / 120,
+      maxSubsteps: 4,
+    };
+
+    const surface60 = new SoftSurface(options);
+    const surface120 = new SoftSurface(options);
+
+    surface60.step(1 / 60);
+
+    surface120.step(1 / 120);
+    surface120.step(1 / 120);
+
+    expect(Array.from(surface60.positions)).toEqual(
+      Array.from(surface120.positions),
+    );
+  });
+
+  it("rejects invalid fixed timestep settings", () => {
+    expect(
+      () =>
+        new SoftSurface({
+          width: 2,
+          height: 2,
+          segmentsX: 2,
+          segmentsY: 2,
+          fixedTimeStep: 0,
+        }),
+    ).toThrow();
+
+    expect(
+      () =>
+        new SoftSurface({
+          width: 2,
+          height: 2,
+          segmentsX: 2,
+          segmentsY: 2,
+          maxSubsteps: 0,
+        }),
+    ).toThrow();
+  });
 });

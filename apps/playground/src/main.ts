@@ -24,7 +24,9 @@ const renderer = new THREE.WebGLRenderer({
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
-document.querySelector<HTMLDivElement>("#app")!.appendChild(renderer.domElement);
+document
+  .querySelector<HTMLDivElement>("#app")!
+  .appendChild(renderer.domElement);
 
 /**
  * SoftSurface simulation
@@ -52,10 +54,7 @@ const surface = new SoftSurface({
  */
 const topLeft = surface.grid.getParticleIndex(0, 0);
 
-const topRight = surface.grid.getParticleIndex(
-  surface.grid.columns - 1,
-  0,
-);
+const topRight = surface.grid.getParticleIndex(surface.grid.columns - 1, 0);
 
 surface.pin(topLeft);
 surface.pin(topRight);
@@ -73,27 +72,18 @@ const material = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide,
 });
 
-const mesh = new THREE.Mesh(
-  geometry,
-  material,
-);
+const mesh = new THREE.Mesh(geometry, material);
 
 scene.add(mesh);
 
 /**
  * Lighting
  */
-const ambientLight = new THREE.AmbientLight(
-  0xffffff,
-  1.5,
-);
+const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
 
 scene.add(ambientLight);
 
-const directionalLight = new THREE.DirectionalLight(
-  0xffffff,
-  3,
-);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
 
 directionalLight.position.set(3, 4, 5);
 
@@ -107,19 +97,13 @@ const clock = new THREE.Clock();
 function animate(): void {
   requestAnimationFrame(animate);
 
-  const delta = Math.min(
-    clock.getDelta(),
-    1 / 30,
-  );
+  const delta = clock.getDelta();
 
   surface.step(delta);
 
   geometry.update();
 
-  renderer.render(
-    scene,
-    camera,
-  );
+  renderer.render(scene, camera);
 }
 
 animate();
@@ -128,14 +112,9 @@ animate();
  * Resize
  */
 window.addEventListener("resize", () => {
-  camera.aspect =
-    window.innerWidth /
-    window.innerHeight;
+  camera.aspect = window.innerWidth / window.innerHeight;
 
   camera.updateProjectionMatrix();
 
-  renderer.setSize(
-    window.innerWidth,
-    window.innerHeight,
-  );
+  renderer.setSize(window.innerWidth, window.innerHeight);
 });

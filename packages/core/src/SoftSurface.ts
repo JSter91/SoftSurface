@@ -9,13 +9,9 @@ import {
   type ConstraintSolverOptions,
 } from "./ConstraintSolver.js";
 
-import {
-  ParticleGrid,
-} from "./ParticleGrid.js";
+import { ParticleGrid } from "./ParticleGrid.js";
 
-import type {
-  ParticleGridOptions,
-} from "./types.js";
+import type { ParticleGridOptions } from "./types.js";
 
 import {
   VerletIntegrator,
@@ -23,11 +19,12 @@ import {
 } from "./VerletIntegrator.js";
 
 export interface SoftSurfaceOptions
-  extends ParticleGridOptions,
-    GridConstraintOptions {
+  extends ParticleGridOptions, GridConstraintOptions {
   damping?: VerletIntegratorOptions["damping"];
   acceleration?: VerletIntegratorOptions["acceleration"];
   iterations?: ConstraintSolverOptions["iterations"];
+  fixedTimeStep?: number;
+  maxSubsteps?: number;
 }
 
 export class SoftSurface {
@@ -36,6 +33,11 @@ export class SoftSurface {
 
   private readonly integrator: VerletIntegrator;
   private readonly solver: ConstraintSolver;
+
+  private readonly fixedTimeStep: number;
+  private readonly maxSubsteps: number;
+
+  private accumulator = 0;
 
   constructor(options: SoftSurfaceOptions) {
     this.grid = new ParticleGrid({
@@ -59,6 +61,20 @@ export class SoftSurface {
     this.solver = new ConstraintSolver({
       iterations: options.iterations,
     });
+
+    const fixedTimeStep = options.fixedTimeStep ?? 1 / 120;
+    const maxSubsteps = options.maxSubsteps ?? 4;
+
+    if (fixedTimeStep <= 0) {
+      throw new RangeError("fixedTimeStep must be greater than 0");
+    }
+
+    if (!Number.isInteger(maxSubsteps) || maxSubsteps < 1) {
+      throw new RangeError("maxSubsteps must be a positive integer");
+    }
+
+    this.fixedTimeStep = fixedTimeStep;
+    this.maxSubsteps = maxSubsteps;
   }
 
   get positions(): Float32Array {
@@ -78,10 +94,33 @@ export class SoftSurface {
   }
 
   step(deltaTime: number): void {
-    this.integrator.step(this.grid, deltaTime);
-    this.solver.solve(this.grid, this.constraints);
+    if (deltaTime <= 0) {
+      return;
+    }
+
+    const maxFrameTime = this.fixedTimeStep * this.maxSubsteps;
+
+    this.accumulator += Math.min(deltaTime, maxFrameTime);
+
+    let substeps = 0;
+
+    while (
+      this.accumulator >= this.fixedTimeStep &&
+      substeps < this.maxSubsteps
+    ) {
+      this.substep(this.fixedTimeStep);
+
+      this.accumulator -= this.fixedTimeStep;
+      substeps++;
+    }
   }
 
+  private substep(deltaTime: number): void {
+    this.integrator.step(this.grid, deltaTime);
+
+    this.solver.solve(this.grid, this.constraints);
+  }
+  
   pin(particleIndex: number): void {
     this.assertParticleIndex(particleIndex);
 
@@ -100,9 +139,7 @@ export class SoftSurface {
       particleIndex < 0 ||
       particleIndex >= this.grid.particleCount
     ) {
-      throw new RangeError(
-        `Particle index out of bounds: ${particleIndex}`,
-      );
+      throw new RangeError(`Particle index out of bounds: ${particleIndex}`);
     }
   }
 }
