@@ -23,3 +23,8 @@ export {
   ConstraintSolver,
   type ConstraintSolverOptions,
 } from "./ConstraintSolver.js";
+
+export {
+  SoftSurface,
+  type SoftSurfaceOptions,
+} from "./SoftSurface.js";
