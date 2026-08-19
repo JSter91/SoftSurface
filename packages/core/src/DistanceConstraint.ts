@@ -39,6 +39,7 @@ export class DistanceConstraint {
   solve(
     positions: Float32Array,
     inverseMasses: Float32Array,
+    stiffness = this.stiffness,
   ): void {
     const offsetA = this.particleA * 3;
     const offsetB = this.particleB * 3;
@@ -64,10 +65,7 @@ export class DistanceConstraint {
     const dy = by - ay;
     const dz = bz - az;
 
-    const distanceSquared =
-      dx * dx +
-      dy * dy +
-      dz * dz;
+    const distanceSquared = dx * dx + dy * dy + dz * dz;
 
     if (distanceSquared === 0) {
       return;
@@ -75,17 +73,13 @@ export class DistanceConstraint {
 
     const distance = Math.sqrt(distanceSquared);
 
-    const difference =
-      (distance - this.restLength) / distance;
+    const difference = (distance - this.restLength) / distance;
 
-    const correction =
-      difference * this.stiffness;
+    const correction = difference * stiffness;
+    
+    const correctionA = correction * (weightA / totalWeight);
 
-    const correctionA =
-      correction * (weightA / totalWeight);
-
-    const correctionB =
-      correction * (weightB / totalWeight);
+    const correctionB = correction * (weightB / totalWeight);
 
     positions[offsetA] += dx * correctionA;
     positions[offsetA + 1] += dy * correctionA;

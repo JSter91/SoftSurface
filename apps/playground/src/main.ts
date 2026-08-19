@@ -1,6 +1,7 @@
 import * as THREE from "three";
 
-import { SoftSurface } from "@softsurface/core";
+import { SoftSurface, type SoftSurfacePreset } from "@softsurface/core";
+
 import { SoftSurfaceGeometry } from "@softsurface/three";
 
 import "./style.css";
@@ -22,6 +23,7 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 document
@@ -29,59 +31,9 @@ document
   .appendChild(renderer.domElement);
 
 /**
- * SoftSurface simulation
- */
-const surface = new SoftSurface({
-  width: 4,
-  height: 3,
-
-  segmentsX: 30,
-  segmentsY: 22,
-
-  structuralStiffness: 1,
-  shearStiffness: 0.85,
-  bendStiffness: 0.35,
-
-  damping: 0.02,
-
-  acceleration: [0, -9.81, 0],
-
-  iterations: 10,
-});
-
-/**
- * Pin the two upper corners.
- */
-const topLeft = surface.grid.getParticleIndex(0, 0);
-
-const topRight = surface.grid.getParticleIndex(surface.grid.columns - 1, 0);
-
-surface.pin(topLeft);
-surface.pin(topRight);
-
-/**
- * Three.js geometry using the same Float32Array
- * used by the physics engine.
- */
-const geometry = new SoftSurfaceGeometry(surface);
-
-const material = new THREE.MeshStandardMaterial({
-  color: 0xd9d9d9,
-  roughness: 0.65,
-  metalness: 0.05,
-  side: THREE.DoubleSide,
-});
-
-const mesh = new THREE.Mesh(geometry, material);
-
-scene.add(mesh);
-
-/**
  * Lighting
  */
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-
-scene.add(ambientLight);
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
 
@@ -90,7 +42,116 @@ directionalLight.position.set(3, 4, 5);
 scene.add(directionalLight);
 
 /**
- * Simulation loop
+ * Material
+ */
+const material = new THREE.MeshStandardMaterial({
+  color: 0xd9d9d9,
+  roughness: 0.65,
+  metalness: 0.05,
+  side: THREE.DoubleSide,
+});
+
+/**
+ * Surface factory
+ */
+function createSurface(preset: SoftSurfacePreset): {
+  surface: SoftSurface;
+  geometry: SoftSurfaceGeometry;
+} {
+  const surface = new SoftSurface({
+    width: 4,
+    height: 3,
+
+    segmentsX: 30,
+    segmentsY: 22,
+
+    preset,
+
+    acceleration: [0, -9.81, 0],
+
+    iterations: 10,
+
+    fixedTimeStep: 1 / 120,
+    maxSubsteps: 4,
+  });
+
+  const topLeft = surface.grid.getParticleIndex(0, 0);
+
+  const topRight = surface.grid.getParticleIndex(surface.grid.columns - 1, 0);
+
+  surface.pin(topLeft);
+  surface.pin(topRight);
+
+  const geometry = new SoftSurfaceGeometry(surface);
+
+  return {
+    surface,
+    geometry,
+  };
+}
+
+let currentPreset: SoftSurfacePreset = "cloth";
+
+let { surface, geometry } = createSurface(currentPreset);
+
+const mesh = new THREE.Mesh(geometry, material);
+
+scene.add(mesh);
+
+/**
+ * Preset UI
+ */
+const controls = document.createElement("div");
+
+controls.className = "controls";
+
+const label = document.createElement("label");
+
+label.textContent = "Material";
+
+const select = document.createElement("select");
+
+const presets: SoftSurfacePreset[] = [
+  "cloth",
+  "silk",
+  "paper",
+  "rubber",
+  "gel",
+];
+
+for (const preset of presets) {
+  const option = document.createElement("option");
+
+  option.value = preset;
+  option.textContent = preset;
+
+  select.appendChild(option);
+}
+
+select.value = currentPreset;
+
+label.appendChild(select);
+controls.appendChild(label);
+
+document.body.appendChild(controls);
+
+select.addEventListener("change", () => {
+  currentPreset = select.value as SoftSurfacePreset;
+
+  const next = createSurface(currentPreset);
+
+  const oldGeometry = geometry;
+
+  surface = next.surface;
+  geometry = next.geometry;
+
+  mesh.geometry = geometry;
+
+  oldGeometry.dispose();
+});
+
+/**
+ * Simulation
  */
 const clock = new THREE.Clock();
 

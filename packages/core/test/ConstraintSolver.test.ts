@@ -63,4 +63,51 @@ describe("ConstraintSolver", () => {
     expect(grid.positions[offset]).toBe(initialX);
     expect(grid.positions[offset + 1]).toBe(initialY);
   });
+
+  it("keeps stiffness reasonably consistent across iteration counts", () => {
+    const createDeformedGrid = () => {
+      const grid = new ParticleGrid({
+        width: 2,
+        height: 2,
+        segmentsX: 2,
+        segmentsY: 2,
+      });
+
+      const center = grid.getParticleIndex(1, 1);
+
+      grid.positions[center * 3] += 1;
+
+      return grid;
+    };
+
+    const grid1 = createDeformedGrid();
+    const grid10 = createDeformedGrid();
+
+    const constraints1 = createGridConstraints(grid1, {
+      structuralStiffness: 0.5,
+      shearStiffness: 0.5,
+      bendStiffness: 0.5,
+    });
+
+    const constraints10 = createGridConstraints(grid10, {
+      structuralStiffness: 0.5,
+      shearStiffness: 0.5,
+      bendStiffness: 0.5,
+    });
+
+    new ConstraintSolver({
+      iterations: 1,
+    }).solve(grid1, constraints1);
+
+    new ConstraintSolver({
+      iterations: 10,
+    }).solve(grid10, constraints10);
+
+    const center = grid1.getParticleIndex(1, 1);
+
+    expect(grid10.positions[center * 3]).toBeCloseTo(
+      grid1.positions[center * 3],
+      1,
+    );
+  });
 });

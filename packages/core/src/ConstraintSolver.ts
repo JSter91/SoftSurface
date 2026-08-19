@@ -12,7 +12,9 @@ export class ConstraintSolver {
     const { iterations = 8 } = options;
 
     if (!Number.isInteger(iterations) || iterations < 1) {
-      throw new RangeError("iterations must be a positive integer");
+      throw new RangeError(
+        "iterations must be a positive integer",
+      );
     }
 
     this.iterations = iterations;
@@ -24,18 +26,61 @@ export class ConstraintSolver {
   ): void {
     const { positions, inverseMasses } = grid;
 
-    for (let iteration = 0; iteration < this.iterations; iteration++) {
+    for (
+      let iteration = 0;
+      iteration < this.iterations;
+      iteration++
+    ) {
       for (const constraint of constraints.structural) {
-        constraint.solve(positions, inverseMasses);
+        constraint.solve(
+          positions,
+          inverseMasses,
+          getIterationStiffness(
+            constraint.stiffness,
+            this.iterations,
+          ),
+        );
       }
 
       for (const constraint of constraints.shear) {
-        constraint.solve(positions, inverseMasses);
+        constraint.solve(
+          positions,
+          inverseMasses,
+          getIterationStiffness(
+            constraint.stiffness,
+            this.iterations,
+          ),
+        );
       }
 
       for (const constraint of constraints.bend) {
-        constraint.solve(positions, inverseMasses);
+        constraint.solve(
+          positions,
+          inverseMasses,
+          getIterationStiffness(
+            constraint.stiffness,
+            this.iterations,
+          ),
+        );
       }
     }
   }
+}
+
+function getIterationStiffness(
+  stiffness: number,
+  iterations: number,
+): number {
+  if (stiffness <= 0) {
+    return 0;
+  }
+
+  if (stiffness >= 1) {
+    return 1;
+  }
+
+  return 1 - Math.pow(
+    1 - stiffness,
+    1 / iterations,
+  );
 }

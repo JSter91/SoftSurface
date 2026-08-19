@@ -10,3 +10,38 @@ body,
 canvas {
   display: block;
 }
+
+.controls {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+
+  padding: 12px 14px;
+
+  color: white;
+  background: rgba(0, 0, 0, 0.65);
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+
+  font-family: system-ui, sans-serif;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  font-size: 14px;
+}
+
+.controls select {
+  padding: 5px 8px;
+
+  color: white;
+  background: #222;
+
+  border: 1px solid #555;
+  border-radius: 4px;
+}
