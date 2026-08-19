@@ -1,20 +1,19 @@
 {
-  "name": "SoftSurface",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "softsurface",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Real-time deformable surfaces for the creative web.",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "pnpm --filter playground dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
       "version": "^11.22.0",
       "onFail": "download"
     }
-  },
-  "type": "module"
+  }
 }

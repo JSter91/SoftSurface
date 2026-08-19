@@ -12,3 +12,9 @@ export {
 export { DistanceConstraint } from "./DistanceConstraint.js";
 
 export const SOFTSURFACE_VERSION = "0.0.1";
+
+export {
+  createGridConstraints,
+  type GridConstraintOptions,
+  type GridConstraints,
+} from "./ConstraintBuilder.js";
