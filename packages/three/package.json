@@ -1,0 +1,30 @@
+{
+  "name": "@softsurface/three",
+  "version": "0.0.1",
+  "description": "Three.js adapter for SoftSurface deformable surfaces.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@softsurface/core": "workspace:*",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^6.0.0",
+    "vitest": "^4.1.10"
+  }
+}
