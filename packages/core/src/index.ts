@@ -18,3 +18,8 @@ export {
   type GridConstraintOptions,
   type GridConstraints,
 } from "./ConstraintBuilder.js";
+
+export {
+  ConstraintSolver,
+  type ConstraintSolverOptions,
+} from "./ConstraintSolver.js";
