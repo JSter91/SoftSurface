@@ -34,12 +34,11 @@ export class SoftSurfaceGeometry extends BufferGeometry {
     this.computeBoundingSphere();
   }
 
-  update(): void {
-    this.positionAttribute.needsUpdate = true;
+update(): void {
+  this.positionAttribute.needsUpdate = true;
 
-    this.computeVertexNormals();
-    this.computeBoundingSphere();
-  }
+  this.computeVertexNormals();
+}
 
   private createIndices(): void {
     const grid = this.surface.grid;

@@ -133,12 +133,14 @@ function createSurface(preset: SoftSurfacePreset): {
 
     acceleration: [0, 0, 0],
 
-    iterations: 10,
+    iterations: 1,
 
     fixedTimeStep: 1 / 120,
     maxSubsteps: 4,
 
-    relaxation: 0.25,
+    relaxation: 0.5,
+    bendModel: "dihedral",
+    bendStiffness: 0.3,
   });
 
   const topLeft = surface.grid.getParticleIndex(0, 0);
@@ -165,6 +167,7 @@ let currentPreset: SoftSurfacePreset = "cloth";
 let { surface, geometry } = createSurface(currentPreset);
 
 const mesh = new THREE.Mesh(geometry, material);
+mesh.frustumCulled = false;
 
 scene.add(mesh);
 
@@ -266,20 +269,116 @@ select.addEventListener("change", () => {
  */
 const clock = new THREE.Clock();
 
-function animate(): void {
+// function animate(): void {
+//   requestAnimationFrame(animate);
+
+//   const delta = clock.getDelta();
+
+//   surface.step(delta);
+
+//   geometry.update();
+
+//   orbitControls.update();
+
+//   renderer.render(scene, camera);
+// }
+
+let physicsTotal = 0;
+let geometryTotal = 0;
+let renderTotal = 0;
+
+let physicsMax = 0;
+let geometryMax = 0;
+let renderMax = 0;
+
+let measuredFrames = 0;
+let lastReportTime = performance.now();
+
+function animate() {
   requestAnimationFrame(animate);
 
   const delta = clock.getDelta();
 
+  const physicsStart = performance.now();
+
   surface.step(delta);
+
+  const physicsEnd = performance.now();
 
   geometry.update();
 
+  const geometryEnd = performance.now();
+
   orbitControls.update();
-
   renderer.render(scene, camera);
-}
 
+  const renderEnd = performance.now();
+
+  const physicsTime =
+    physicsEnd - physicsStart;
+
+  const geometryTime =
+    geometryEnd - physicsEnd;
+
+  const renderTime =
+    renderEnd - geometryEnd;
+
+  physicsTotal += physicsTime;
+  geometryTotal += geometryTime;
+  renderTotal += renderTime;
+
+  physicsMax =
+    Math.max(physicsMax, physicsTime);
+
+  geometryMax =
+    Math.max(geometryMax, geometryTime);
+
+  renderMax =
+    Math.max(renderMax, renderTime);
+
+  measuredFrames++;
+
+  const now = performance.now();
+
+  if (now - lastReportTime >= 1000) {
+    console.table({
+      physics: {
+        avgMs:
+          physicsTotal /
+          measuredFrames,
+        maxMs:
+          physicsMax,
+      },
+
+      geometry: {
+        avgMs:
+          geometryTotal /
+          measuredFrames,
+        maxMs:
+          geometryMax,
+      },
+
+      render: {
+        avgMs:
+          renderTotal /
+          measuredFrames,
+        maxMs:
+          renderMax,
+      },
+    });
+
+    physicsTotal = 0;
+    geometryTotal = 0;
+    renderTotal = 0;
+
+    physicsMax = 0;
+    geometryMax = 0;
+    renderMax = 0;
+
+    measuredFrames = 0;
+    lastReportTime = now;
+  }
+}
 animate();
 
 /**
