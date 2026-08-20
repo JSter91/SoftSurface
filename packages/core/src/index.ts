@@ -50,3 +50,7 @@ export {
   DihedralBendingConstraint,
   computeDihedralAngle,
 } from "./DihedralBendingConstraint.js";
+
+export {
+  buildGridDihedralConstraints,
+} from "./DihedralConstraintBuilder.js";
