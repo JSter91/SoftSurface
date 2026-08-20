@@ -40,3 +40,8 @@ export {
   type GrabOptions,
   type GrabPoint,
 } from "./GrabInteraction.js";
+
+export {
+  SurfaceRelaxation,
+  type SurfaceRelaxationOptions,
+} from "./SurfaceRelaxation.js";

@@ -25,11 +25,17 @@ import {
   type GrabOptions,
   type GrabPoint,
 } from "./GrabInteraction.js";
+
+import {
+  SurfaceRelaxation,
+  type SurfaceRelaxationOptions,
+} from "./SurfaceRelaxation.js";
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
   preset?: SoftSurfacePreset;
   damping?: VerletIntegratorOptions["damping"];
   acceleration?: VerletIntegratorOptions["acceleration"];
+  relaxation?: SurfaceRelaxationOptions["strength"];
   iterations?: ConstraintSolverOptions["iterations"];
   fixedTimeStep?: number;
   maxSubsteps?: number;
@@ -41,6 +47,8 @@ export class SoftSurface {
 
   private readonly integrator: VerletIntegrator;
   private readonly solver: ConstraintSolver;
+
+  private readonly relaxation: SurfaceRelaxation;
 
   private readonly fixedTimeStep: number;
   private readonly maxSubsteps: number;
@@ -83,6 +91,10 @@ export class SoftSurface {
 
     this.solver = new ConstraintSolver({
       iterations: options.iterations,
+    });
+
+    this.relaxation = new SurfaceRelaxation(this.grid, {
+      strength: options.relaxation,
     });
 
     const fixedTimeStep = options.fixedTimeStep ?? 1 / 120;
@@ -159,9 +171,10 @@ export class SoftSurface {
 
     this.solver.solve(this.grid, this.constraints);
 
+    this.relaxation.apply(this.grid, deltaTime);
     this.grabInteraction.apply();
   }
-  
+
   pin(particleIndex: number): void {
     this.assertParticleIndex(particleIndex);
 

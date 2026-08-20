@@ -1,9 +1,6 @@
 import * as THREE from "three";
 
-import {
-  SoftSurface,
-  type SoftSurfacePreset,
-} from "@softsurface/core";
+import { SoftSurface, type SoftSurfacePreset } from "@softsurface/core";
 
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -19,52 +16,34 @@ import "./style.css";
  */
 const scene = new THREE.Scene();
 
-scene.background =
-  new THREE.Color(0x111111);
+scene.background = new THREE.Color(0x111111);
 
 /**
  * Camera
  */
-const camera =
-  new THREE.PerspectiveCamera(
-    45,
-    window.innerWidth /
-      window.innerHeight,
-    0.1,
-    100,
-  );
-
-camera.position.set(
-  0,
-  0,
-  7,
+const camera = new THREE.PerspectiveCamera(
+  45,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  100,
 );
+
+camera.position.set(0, 0, 7);
 
 /**
  * Renderer
  */
-const renderer =
-  new THREE.WebGLRenderer({
-    antialias: true,
-  });
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+});
 
-renderer.setPixelRatio(
-  Math.min(
-    window.devicePixelRatio,
-    2,
-  ),
-);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-renderer.setSize(
-  window.innerWidth,
-  window.innerHeight,
-);
+renderer.setSize(window.innerWidth, window.innerHeight);
 
 document
   .querySelector<HTMLDivElement>("#app")!
-  .appendChild(
-    renderer.domElement,
-  );
+  .appendChild(renderer.domElement);
 
 /**
  * Camera controls
@@ -75,11 +54,7 @@ document
  * Wheel:
  * zoom.
  */
-const orbitControls =
-  new OrbitControls(
-    camera,
-    renderer.domElement,
-  );
+const orbitControls = new OrbitControls(camera, renderer.domElement);
 
 orbitControls.enableDamping = true;
 orbitControls.dampingFactor = 0.08;
@@ -89,106 +64,92 @@ orbitControls.enablePan = false;
 orbitControls.minDistance = 4;
 orbitControls.maxDistance = 12;
 
-orbitControls.target.set(
-  0,
-  0,
-  0,
-);
+orbitControls.target.set(0, 0, 0);
 
 orbitControls.update();
 
 /**
  * Lighting
  */
-scene.add(
-  new THREE.AmbientLight(
-    0xffffff,
-    1.5,
-  ),
-);
+scene.add(new THREE.AmbientLight(0xffffff, 1.5));
 
-const directionalLight =
-  new THREE.DirectionalLight(
-    0xffffff,
-    3,
-  );
+const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
 
-directionalLight.position.set(
-  3,
-  4,
-  5,
-);
+directionalLight.position.set(3, 4, 5);
 
-scene.add(
-  directionalLight,
-);
+scene.add(directionalLight);
 
 /**
  * Material
  */
-const material =
-  new THREE.MeshStandardMaterial({
-    color: 0xd9d9d9,
-    roughness: 0.65,
-    metalness: 0.05,
-    side: THREE.DoubleSide,
-  });
+const material = new THREE.MeshStandardMaterial({
+  color: 0xd9d9d9,
+  roughness: 0.65,
+  metalness: 0.05,
+  side: THREE.DoubleSide,
+});
 
 /**
  * Surface factory
  */
-function createSurface(
-  preset: SoftSurfacePreset,
-): {
+function createSurface(preset: SoftSurfacePreset): {
   surface: SoftSurface;
   geometry: SoftSurfaceGeometry;
 } {
-  const surface =
-    new SoftSurface({
-      width: 4,
-      height: 3,
+  /* gravity 1 */
+  // const surface =
+  //   new SoftSurface({
+  //     width: 4,
+  //     height: 3,
 
-      segmentsX: 30,
-      segmentsY: 22,
+  //     segmentsX: 30,
+  //     segmentsY: 22,
 
-      preset,
+  //     preset,
 
-      acceleration: [
-        0,
-        -9.81,
-        0,
-      ],
+  //     acceleration: [
+  //       0,
+  //       -9.81,
+  //       0,
+  //     ],
 
-      iterations: 10,
+  //     iterations: 10,
 
-      fixedTimeStep: 1 / 120,
-      maxSubsteps: 4,
-    });
+  //     fixedTimeStep: 1 / 120,
+  //     maxSubsteps: 4,
 
-  const topLeft =
-    surface.grid.getParticleIndex(
-      0,
-      0,
-    );
+  //     relaxation: 0.025
+  //   });
 
-  const topRight =
-    surface.grid.getParticleIndex(
-      surface.grid.columns - 1,
-      0,
-    );
+  /* gravity 0 */
+  const surface = new SoftSurface({
+    width: 4,
+    height: 3,
 
-  surface.pin(
-    topLeft,
-  );
+    segmentsX: 48,
+    segmentsY: 36,
 
-  surface.pin(
-    topRight,
-  );
+    preset,
 
-  const geometry =
-    new SoftSurfaceGeometry(
-      surface,
-    );
+    acceleration: [0, 0, 0],
+
+    iterations: 10,
+
+    fixedTimeStep: 1 / 120,
+    maxSubsteps: 4,
+
+    relaxation: 0.25,
+  });
+
+  const topLeft = surface.grid.getParticleIndex(0, 0);
+
+  const topRight = surface.grid.getParticleIndex(surface.grid.columns - 1, 0);
+
+  surface.pin(topLeft);
+
+  surface.pin(topRight);
+
+  const geometry = new SoftSurfaceGeometry(surface);
 
   return {
     surface,
@@ -199,25 +160,13 @@ function createSurface(
 /**
  * Initial surface
  */
-let currentPreset:
-  SoftSurfacePreset = "cloth";
+let currentPreset: SoftSurfacePreset = "cloth";
 
-let {
-  surface,
-  geometry,
-} = createSurface(
-  currentPreset,
-);
+let { surface, geometry } = createSurface(currentPreset);
 
-const mesh =
-  new THREE.Mesh(
-    geometry,
-    material,
-  );
+const mesh = new THREE.Mesh(geometry, material);
 
-scene.add(
-  mesh,
-);
+scene.add(mesh);
 
 /**
  * Interaction factory
@@ -238,149 +187,97 @@ function createInteraction(): SoftSurfacePointerInteraction {
       },
 
       onGrabStart: () => {
-        orbitControls.enabled =
-          false;
+        orbitControls.enabled = false;
       },
 
       onGrabEnd: () => {
-        orbitControls.enabled =
-          true;
+        orbitControls.enabled = true;
       },
     },
   );
 }
 
-let interaction =
-  createInteraction();
+let interaction = createInteraction();
 
 /**
  * Preset UI
  */
-const uiControls =
-  document.createElement(
-    "div",
-  );
+const uiControls = document.createElement("div");
 
-uiControls.className =
-  "controls";
+uiControls.className = "controls";
 
-const label =
-  document.createElement(
-    "label",
-  );
+const label = document.createElement("label");
 
-label.textContent =
-  "Material";
+label.textContent = "Material";
 
-const select =
-  document.createElement(
-    "select",
-  );
+const select = document.createElement("select");
 
-const presets:
-  SoftSurfacePreset[] = [
-    "cloth",
-    "silk",
-    "paper",
-    "rubber",
-    "gel",
-  ];
+const presets: SoftSurfacePreset[] = [
+  "cloth",
+  "silk",
+  "paper",
+  "rubber",
+  "gel",
+];
 
-for (
-  const preset of presets
-) {
-  const option =
-    document.createElement(
-      "option",
-    );
+for (const preset of presets) {
+  const option = document.createElement("option");
 
-  option.value =
-    preset;
+  option.value = preset;
 
-  option.textContent =
-    preset;
+  option.textContent = preset;
 
-  select.appendChild(
-    option,
-  );
+  select.appendChild(option);
 }
 
-select.value =
-  currentPreset;
+select.value = currentPreset;
 
-label.appendChild(
-  select,
-);
+label.appendChild(select);
 
-uiControls.appendChild(
-  label,
-);
+uiControls.appendChild(label);
 
-document.body.appendChild(
-  uiControls,
-);
+document.body.appendChild(uiControls);
 
 /**
  * Change material
  */
-select.addEventListener(
-  "change",
-  () => {
-    currentPreset =
-      select.value as SoftSurfacePreset;
+select.addEventListener("change", () => {
+  currentPreset = select.value as SoftSurfacePreset;
 
-    const next =
-      createSurface(
-        currentPreset,
-      );
+  const next = createSurface(currentPreset);
 
-    const oldGeometry =
-      geometry;
+  const oldGeometry = geometry;
 
-    interaction.dispose();
+  interaction.dispose();
 
-    surface =
-      next.surface;
+  surface = next.surface;
 
-    geometry =
-      next.geometry;
+  geometry = next.geometry;
 
-    mesh.geometry =
-      geometry;
+  mesh.geometry = geometry;
 
-    interaction =
-      createInteraction();
+  interaction = createInteraction();
 
-    oldGeometry.dispose();
-  },
-);
+  oldGeometry.dispose();
+});
 
 /**
  * Simulation
  */
-const clock =
-  new THREE.Clock();
+const clock = new THREE.Clock();
 
 function animate(): void {
-  requestAnimationFrame(
-    animate,
-  );
+  requestAnimationFrame(animate);
 
-  const delta =
-    clock.getDelta();
+  const delta = clock.getDelta();
 
-  surface.step(
-    delta,
-  );
+  surface.step(delta);
 
   geometry.update();
 
   orbitControls.update();
 
-  renderer.render(
-    scene,
-    camera,
-  );
+  renderer.render(scene, camera);
 }
 
 animate();
@@ -388,18 +285,10 @@ animate();
 /**
  * Resize
  */
-window.addEventListener(
-  "resize",
-  () => {
-    camera.aspect =
-      window.innerWidth /
-      window.innerHeight;
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
 
-    camera.updateProjectionMatrix();
+  camera.updateProjectionMatrix();
 
-    renderer.setSize(
-      window.innerWidth,
-      window.innerHeight,
-    );
-  },
-);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
