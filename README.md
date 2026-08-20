@@ -534,8 +534,8 @@ The core architectural rule is simple:
 
 That separation should remain intact as the project grows.
 
-License
+## License
 
-A license has not been specified yet.
+SoftSurface is released under the MIT License.
 
-Before publishing SoftSurface as a reusable open-source package, add an explicit LICENSE file and update this section accordingly.
+See [LICENSE](./LICENSE) for details.
