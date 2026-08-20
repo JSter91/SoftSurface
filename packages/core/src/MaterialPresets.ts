@@ -12,41 +12,39 @@ export interface MaterialParameters {
   damping: number;
 }
 
-export const MATERIAL_PRESETS: Readonly<
-  Record<SoftSurfacePreset, Readonly<MaterialParameters>>
-> = {
+export const MATERIAL_PRESETS = {
   cloth: {
-    structuralStiffness: 0.95,
-    shearStiffness: 0.8,
-    bendStiffness: 0.3,
+    structuralStiffness: 0.99,
+    shearStiffness: 0.92,
+    bendStiffness: 0.25,
     damping: 0.03,
   },
 
   silk: {
-    structuralStiffness: 0.9,
-    shearStiffness: 0.7,
-    bendStiffness: 0.12,
+    structuralStiffness: 0.985,
+    shearStiffness: 0.85,
+    bendStiffness: 0.08,
     damping: 0.025,
   },
 
   paper: {
-    structuralStiffness: 1,
-    shearStiffness: 0.95,
-    bendStiffness: 0.85,
-    damping: 0.05,
+    structuralStiffness: 0.999,
+    shearStiffness: 0.98,
+    bendStiffness: 0.9,
+    damping: 0.045,
   },
 
   rubber: {
-    structuralStiffness: 0.65,
-    shearStiffness: 0.6,
+    structuralStiffness: 0.82,
+    shearStiffness: 0.78,
     bendStiffness: 0.4,
-    damping: 0.06,
+    damping: 0.04,
   },
 
   gel: {
-    structuralStiffness: 0.55,
-    shearStiffness: 0.5,
-    bendStiffness: 0.2,
+    structuralStiffness: 0.9,
+    shearStiffness: 0.75,
+    bendStiffness: 0.15,
     damping: 0.1,
   },
-};
+} as const;
