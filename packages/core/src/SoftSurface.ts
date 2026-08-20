@@ -20,6 +20,11 @@ import {
 
 import { MATERIAL_PRESETS, type SoftSurfacePreset } from "./MaterialPresets.js";
 
+import {
+  GrabInteraction,
+  type GrabOptions,
+  type GrabPoint,
+} from "./GrabInteraction.js";
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
   preset?: SoftSurfacePreset;
@@ -42,6 +47,8 @@ export class SoftSurface {
 
   private accumulator = 0;
 
+  private readonly grabInteraction: GrabInteraction;
+
   constructor(options: SoftSurfaceOptions) {
     const preset = MATERIAL_PRESETS[options.preset ?? "cloth"];
 
@@ -60,6 +67,8 @@ export class SoftSurface {
       segmentsX: options.segmentsX,
       segmentsY: options.segmentsY,
     });
+
+    this.grabInteraction = new GrabInteraction(this.grid);
 
     this.constraints = createGridConstraints(this.grid, {
       structuralStiffness: structuralStiffness,
@@ -107,6 +116,22 @@ export class SoftSurface {
     return this.grid.particleCount;
   }
 
+  get isGrabbed(): boolean {
+    return this.grabInteraction.isActive;
+  }
+
+  grab(point: GrabPoint, options?: GrabOptions): number {
+    return this.grabInteraction.grab(point, options);
+  }
+
+  moveGrab(point: GrabPoint): void {
+    this.grabInteraction.move(point);
+  }
+
+  release(): void {
+    this.grabInteraction.release();
+  }
+
   step(deltaTime: number): void {
     if (deltaTime <= 0) {
       return;
@@ -133,8 +158,10 @@ export class SoftSurface {
     this.integrator.step(this.grid, deltaTime);
 
     this.solver.solve(this.grid, this.constraints);
-  }
 
+    this.grabInteraction.apply();
+  }
+  
   pin(particleIndex: number): void {
     this.assertParticleIndex(particleIndex);
 

@@ -34,3 +34,9 @@ export {
   type MaterialParameters,
   type SoftSurfacePreset,
 } from "./MaterialPresets.js";
+
+export {
+  GrabInteraction,
+  type GrabOptions,
+  type GrabPoint,
+} from "./GrabInteraction.js";
