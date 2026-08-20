@@ -9,6 +9,12 @@ body,
 
 canvas {
   display: block;
+  touch-action: none;
+  cursor: grab;
+}
+
+canvas:active {
+  cursor: grabbing;
 }
 
 .controls {
