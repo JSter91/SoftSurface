@@ -590,6 +590,13 @@ It should eventually become another material parameter rather than a hardcoded s
 [ ] Documentation
 [ ] npm publishing
 ```
+## long-term deformable geometry goals
+
+[ ] Arbitrary triangle-mesh topology
+[ ] Closed-mesh volume preservation
+[ ] GLTF deformable geometry experiments
+[ ] XPBD evaluation
+[ ] Volumetric / tetrahedral soft bodies — research
 
 ---
 
@@ -617,3 +624,111 @@ Renderer-specific behavior belongs in adapters such as:
 Three.js may determine **where** an interaction occurs, but the physics engine must determine **how the surface reacts**.
 
 This separation is considered a fundamental architectural constraint of SoftSurface.
+
+
+# Long-term direction — General deformable geometry
+
+SoftSurface should not be architecturally limited to rectangular cloth simulation.
+
+The current particle grid is intentionally the simplest topology for developing and validating the physics engine, but a possible long-term direction is support for **arbitrary deformable 3D geometry**.
+
+Potential inputs include:
+
+```text
+PlaneGeometry
+SphereGeometry
+BoxGeometry
+arbitrary triangle meshes
+GLTF / product geometry
+```
+
+A future topology abstraction could evolve from:
+
+```text
+ParticleGrid
+```
+
+toward a more general representation such as:
+
+```text
+ParticleMesh / SurfaceTopology
+```
+
+where particles and constraints are derived from mesh vertices, edges and connectivity rather than from a regular `(x, y)` grid.
+
+Possible evolution:
+
+```text
+Particle system
+      │
+      ├── Grid surface
+      │      └── cloth / silk / paper
+      │
+      └── Arbitrary mesh
+             ├── sphere
+             ├── cube
+             ├── product geometry
+             └── GLTF models
+```
+
+## Surface deformation vs soft bodies
+
+Arbitrary surface deformation and true volumetric soft-body simulation are separate capabilities.
+
+A closed triangle mesh using only surface constraints can deform, but may collapse because it has no concept of internal volume.
+
+Future closed-body support may therefore introduce:
+
+```text
+surface constraints
++
+bend constraints
++
+volume preservation
++
+collision constraints
+```
+
+A more advanced future implementation could optionally investigate XPBD and tetrahedral volumetric meshes.
+
+This is considered a **possible expansion path**, not a requirement for the current cloth/surface MVP.
+
+## Potential applications
+
+This direction could enable:
+
+* interactive 3D product presentation
+* material previews
+* footwear and sole deformation
+* cushions, mattresses and foam products
+* rubber and silicone objects
+* flexible packaging
+* interactive GLTF models
+* creative 3D experiences
+* game objects and environmental soft bodies
+
+## Product positioning
+
+SoftSurface does not currently aim to replace engineering-grade FEM or scientific material simulation.
+
+The intended opportunity is a lightweight layer between purely visual vertex deformation and heavyweight general-purpose physics engines:
+
+```text
+visual deformation
+        ↓
+SoftSurface
+        ↓
+general soft-body / engineering simulation
+```
+
+The emphasis should remain on:
+
+* browser-first usage
+* simple APIs
+* renderer independence
+* real-time interaction
+* visually plausible material behavior
+* creative-web and product-experience use cases
+
+Architectural decisions made during the current MVP should avoid unnecessarily preventing this future evolution.
+
