@@ -1,4 +1,5 @@
-export class DistanceConstraint {
+import type { Constraint } from "./Constraint.js";
+export class DistanceConstraint implements Constraint {
   readonly particleA: number;
   readonly particleB: number;
   readonly restLength: number;
@@ -76,7 +77,7 @@ export class DistanceConstraint {
     const difference = (distance - this.restLength) / distance;
 
     const correction = difference * stiffness;
-    
+
     const correctionA = correction * (weightA / totalWeight);
 
     const correctionB = correction * (weightB / totalWeight);

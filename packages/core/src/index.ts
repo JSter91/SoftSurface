@@ -54,3 +54,7 @@ export {
 export {
   buildGridDihedralConstraints,
 } from "./DihedralConstraintBuilder.js";
+
+export type {
+  Constraint,
+} from "./Constraint.js";

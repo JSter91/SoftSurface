@@ -1,6 +1,8 @@
+import type { Constraint } from "./Constraint.js";
+
 const EPSILON = 1e-12;
 
-export class DihedralBendingConstraint {
+export class DihedralBendingConstraint implements Constraint {
   readonly oppositeA: number;
   readonly oppositeB: number;
 

@@ -1,5 +1,6 @@
 import { DistanceConstraint } from "./DistanceConstraint.js";
 import { ParticleGrid } from "./ParticleGrid.js";
+import type { Constraint } from "./Constraint.js";
 
 export interface GridConstraintOptions {
   structuralStiffness?: number;
@@ -8,9 +9,9 @@ export interface GridConstraintOptions {
 }
 
 export interface GridConstraints {
-  structural: DistanceConstraint[];
-  shear: DistanceConstraint[];
-  bend: DistanceConstraint[];
+  structural: Constraint[];
+  shear: Constraint[];
+  bend: Constraint[];
 }
 
 export function createGridConstraints(

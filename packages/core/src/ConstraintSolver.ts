@@ -1,3 +1,4 @@
+import type { Constraint } from "./Constraint.js";
 import type { GridConstraints } from "./ConstraintBuilder.js";
 import type { ParticleGrid } from "./ParticleGrid.js";
 
@@ -31,39 +32,45 @@ export class ConstraintSolver {
       iteration < this.iterations;
       iteration++
     ) {
-      for (const constraint of constraints.structural) {
-        constraint.solve(
-          positions,
-          inverseMasses,
-          getIterationStiffness(
-            constraint.stiffness,
-            this.iterations,
-          ),
-        );
-      }
+      solveConstraintGroup(
+        constraints.structural,
+        positions,
+        inverseMasses,
+        this.iterations,
+      );
 
-      for (const constraint of constraints.shear) {
-        constraint.solve(
-          positions,
-          inverseMasses,
-          getIterationStiffness(
-            constraint.stiffness,
-            this.iterations,
-          ),
-        );
-      }
+      solveConstraintGroup(
+        constraints.shear,
+        positions,
+        inverseMasses,
+        this.iterations,
+      );
 
-      for (const constraint of constraints.bend) {
-        constraint.solve(
-          positions,
-          inverseMasses,
-          getIterationStiffness(
-            constraint.stiffness,
-            this.iterations,
-          ),
-        );
-      }
+      solveConstraintGroup(
+        constraints.bend,
+        positions,
+        inverseMasses,
+        this.iterations,
+      );
     }
+  }
+}
+
+function solveConstraintGroup(
+  constraints: readonly Constraint[],
+  positions: Float32Array,
+  inverseMasses: Float32Array,
+  iterations: number,
+): void {
+  for (const constraint of constraints) {
+    constraint.solve(
+      positions,
+      inverseMasses,
+      getIterationStiffness(
+        constraint.stiffness,
+        iterations,
+      ),
+    );
   }
 }
 
