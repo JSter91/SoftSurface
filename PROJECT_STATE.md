@@ -1,7 +1,7 @@
 # SoftSurface — Project State
 
-**Last updated:** 2026-08-19
-**Status:** Active development — early physics MVP
+**Last updated:** 2026-08-20
+**Status:** Active development — interactive physics MVP
 
 ## Goal
 
@@ -9,13 +9,13 @@ SoftSurface is a lightweight, renderer-agnostic engine for real-time deformable 
 
 The goal is to support materials and behaviors such as:
 
-- cloth
-- silk
-- paper
-- rubber
-- gel
-- membranes
-- interactive deformable surfaces
+* cloth
+* silk
+* paper
+* rubber
+* gel
+* membranes
+* interactive deformable surfaces
 
 The physics engine must remain independent from rendering libraries such as Three.js.
 
@@ -42,14 +42,16 @@ Renderer-independent physics engine.
 
 Currently contains:
 
-- `ParticleGrid`
-- `VerletIntegrator`
-- `DistanceConstraint`
-- `ConstraintBuilder`
-- `ConstraintSolver`
-- `SoftSurface`
-- material presets
-- fixed timestep simulation
+* `ParticleGrid`
+* `VerletIntegrator`
+* `DistanceConstraint`
+* `ConstraintBuilder`
+* `ConstraintSolver`
+* `SoftSurface`
+* `GrabInteraction`
+* material presets
+* fixed timestep simulation
+* weighted grab interaction
 
 The core has **no dependency on Three.js, React or the DOM**.
 
@@ -59,9 +61,34 @@ Three.js adapter.
 
 Currently contains:
 
-- `SoftSurfaceGeometry`
+* `SoftSurfaceGeometry`
+* `SoftSurfacePointerInteraction`
 
 `SoftSurfaceGeometry` exposes the simulation's `Float32Array` directly as a Three.js `BufferAttribute`, avoiding a position-array copy on every frame.
+
+`SoftSurfacePointerInteraction` handles renderer-specific pointer interaction:
+
+```text
+pointer
+   ↓
+Three.js Raycaster
+   ↓
+mesh intersection
+   ↓
+world-space point
+   ↓
+mesh local-space conversion
+   ↓
+SoftSurface grab API
+```
+
+The physics core therefore remains unaware of:
+
+* pointers
+* DOM events
+* cameras
+* raycasting
+* Three.js meshes
 
 ### `apps/playground`
 
@@ -69,11 +96,11 @@ Vite + Three.js development environment.
 
 It is used only for:
 
-- visual testing
-- material tuning
-- interaction experiments
-- performance testing
-- examples
+* visual testing
+* material tuning
+* interaction experiments
+* performance testing
+* examples
 
 It is not part of the published library.
 
@@ -93,6 +120,8 @@ Shear constraints
 Bend constraints
     ↓
 Iterative constraint solver
+    ↓
+Weighted grab interaction
     ↓
 Updated Float32Array positions
 ```
@@ -135,7 +164,7 @@ with a configurable maximum number of substeps.
 
 `surface.step(deltaTime)` accepts the render-frame delta, while the engine internally advances physics using fixed simulation steps.
 
-This keeps the simulation more consistent across different rendering frame rates.
+This keeps the simulation more consistent across different rendering frame rates and prevents large frame-time spikes from destabilizing the solver.
 
 ---
 
@@ -165,6 +194,8 @@ iterationStiffness =
 
 This makes material parameters significantly more meaningful.
 
+The visual comparison in the playground confirmed that the normalization was necessary: before the correction, most presets appeared nearly identical.
+
 ---
 
 ## Material presets
@@ -188,86 +219,240 @@ bendStiffness
 damping
 ```
 
+### Stretch vs bend
+
+An important distinction discovered during visual tuning:
+
+```text
+stretch ≠ bend
+```
+
+**Stretch** controls how much the material can change its dimensions.
+
+**Bend** controls how easily the material can fold while preserving those dimensions.
+
+A cloth-like material generally needs:
+
+```text
+high structural stiffness
++
+relatively low bend stiffness
+```
+
+This allows it to resist stretching while still forming folds.
+
 ### Current interpretation
 
 **Cloth**
 
-- low stretch
-- medium bend resistance
-- moderate movement
+* low stretch
+* medium bend resistance
+* moderate movement
 
 **Silk**
 
-- low stretch
-- very low bend resistance
-- easy folding
+* low stretch
+* very low bend resistance
+* easy folding
+* light response
 
 **Paper**
 
-- almost no stretch
-- high bend resistance
-- tends to retain flatter shapes
+* almost no stretch
+* high bend resistance
+* tends to retain flatter shapes
 
 **Rubber**
 
-- more stretch
-- medium bend resistance
-- stronger elastic behavior
+* more stretch
+* medium bend resistance
+* stronger elastic response
 
 **Gel**
 
-- moderate stretch
-- low bend resistance
-- high damping
-- slower / softer response
+* moderate stretch
+* low bend resistance
+* high damping
+* slower / softer response
 
-Preset values are still experimental and will be tuned visually.
+Preset values are still experimental and will continue to be tuned visually.
+
+---
+
+## Grab interaction
+
+Weighted grab interaction is implemented in `@softsurface/core`.
+
+Public API:
+
+```ts
+surface.grab(...)
+surface.moveGrab(...)
+surface.release()
+```
+
+The grab affects a **region of particles**, not a single vertex.
+
+Conceptually:
+
+```text
+             grab center
+                  ↓
+
+             strongest
+                ███
+             ███████
+          ░░█████████░░
+        ░░░░█████████░░░░
+             weaker
+```
+
+Particles closer to the grab center receive a stronger influence.
+
+A smooth radial falloff is used so the interaction produces a deformation rather than a sharp vertex pull.
+
+Relative particle offsets around the initial grab point are preserved.
+
+`previousPositions` are moved together with current positions during the grab correction so that the positional correction does not accidentally generate excessive Verlet velocity.
+
+Pinned particles are ignored by the grab interaction.
+
+---
+
+## Three.js pointer interaction
+
+`SoftSurfacePointerInteraction` converts browser pointer input into the renderer-independent core grab API.
+
+### Grab workflow
+
+```text
+pointerdown
+    ↓
+raycast against SoftSurface mesh
+    ↓
+intersection point in world space
+    ↓
+convert to mesh local space
+    ↓
+surface.grab(...)
+```
+
+During dragging, a mathematical plane is created through the original intersection point and oriented toward the camera.
+
+Future pointer rays intersect this plane:
+
+```text
+pointer move
+    ↓
+camera ray
+    ↓
+drag plane
+    ↓
+world-space target
+    ↓
+local-space target
+    ↓
+surface.moveGrab(...)
+```
+
+This provides stable 3D dragging from a 2D pointer.
 
 ---
 
 ## Playground status
 
-The first Three.js simulation is working.
+The Three.js playground currently supports:
 
-Current demo:
+* rectangular deformable surface
+* two upper corners pinned
+* gravity
+* real-time simulation
+* `MeshStandardMaterial`
+* runtime material preset selector
+* weighted mouse grab
+* camera orbit
+* zoom
+* viewing deformations from arbitrary angles
 
-- rectangular deformable surface
-- two upper corners pinned
-- gravity
-- real-time simulation
-- Three.js `MeshStandardMaterial`
-- runtime material preset selector
+### Pointer UX
 
-The different presets are now visually distinguishable.
+The playground now distinguishes interaction based on where the primary pointer starts:
 
-The most obvious differences currently come from:
+```text
+LEFT DRAG on SoftSurface
+        ↓
+deform material
 
-- stretch
-- bend behavior
-- damping / bounce
+
+LEFT DRAG on empty space
+        ↓
+orbit camera
+
+
+MOUSE WHEEL
+        ↓
+zoom
+```
+
+This is achieved by letting `SoftSurfacePointerInteraction` raycast first.
+
+If the mesh is hit, SoftSurface takes control of the pointer.
+
+If no mesh is hit, the event is left to Three.js `OrbitControls`.
+
+This allows both material interaction and scene navigation using the primary mouse button.
 
 ---
 
 ## Tests
 
-Current test coverage includes:
+Current automated coverage includes:
 
-- particle grid creation
-- initial particle positions
-- inverse masses
-- Verlet integration
-- damping
-- acceleration
-- pinned particles
-- distance constraints
-- grid constraint generation
-- iterative constraint solving
-- SoftSurface API
-- material presets
-- fixed timestep behavior
-- Three.js geometry adapter
+### `@softsurface/core`
 
-Tests and TypeScript builds are currently passing.
+* particle grid creation
+* initial particle positions
+* inverse masses
+* Verlet integration
+* damping
+* acceleration
+* pinned particles
+* distance constraints
+* grid constraint generation
+* iterative constraint solving
+* stiffness normalization behavior
+* SoftSurface API
+* material presets
+* fixed timestep behavior
+* weighted grab selection
+* weighted grab movement
+* grab falloff
+* pinned-particle grab behavior
+* grab release
+
+### `@softsurface/three`
+
+* direct sharing of SoftSurface position buffers
+* expected vertex count
+* indexed triangle generation
+* UV generation
+
+The last full workspace verification before the pointer/orbit integration completed successfully with:
+
+```text
+@softsurface/core
+32 tests passing
+
+@softsurface/three
+4 tests passing
+
+Total
+36 tests passing
+```
+
+TypeScript builds and the Vite production build were also passing.
+
+`SoftSurfacePointerInteraction` is currently verified through the interactive playground; dedicated automated tests for pointer/raycast behavior have not yet been added.
 
 ---
 
@@ -282,69 +467,94 @@ c9851ae feat(three): add SoftSurface geometry adapter
 00efc74 feat(core): add material presets
 ```
 
-Additional commits were made afterwards for stiffness normalization, preset tuning and playground cleanup.
+Later milestones include:
+
+```text
+fix(core): normalize stiffness across solver iterations
+feat(core): add weighted grab interaction
+feat(three): add pointer grab and orbit interaction
+```
+
+Commit hashes for these later milestones should be added when needed.
 
 ---
 
 ## Current observations
 
-The first implementation initially made all materials appear too similar.
+### Material differentiation
 
-Reason:
+The original material implementation made most presets appear too similar.
 
-```text
-constraint stiffness × many solver iterations
-```
+The main reason was repeated application of high stiffness values during solver iterations.
 
-made most constraints effectively rigid.
+After stiffness normalization, the differences became visually meaningful.
 
-After stiffness normalization, the differences between materials became clearly visible.
+The most noticeable characteristics currently are:
 
-Another important observation:
+* stretch
+* bend
+* damping
+* bounce / energy retention
 
-```text
-stretch ≠ bend
-```
+### Interaction
 
-A material can resist stretching strongly while still folding very easily.
+Weighted grabbing produces a substantially more natural deformation than pulling a single vertex.
 
-This distinction is especially important for cloth and silk.
+The interaction is now strong enough to evaluate material behavior manually from multiple viewing angles.
+
+### Current visual gap vs HoloCloth
+
+The system is functional and interactive, but the resulting deformation is not yet at the visual quality of HoloCloth.
+
+Likely missing elements include:
+
+* surface smoothing / relaxation
+* improved wrinkle propagation
+* further material tuning
+* possibly better constraint formulation
+* zero-gravity / suspended-surface scenarios
+* improved lighting/material presentation later
+
+The next improvements should focus on the **physical shape and motion first**, not shaders.
 
 ---
 
 ## Next milestone
 
-### Mouse grab interaction
+### Surface smoothing / relaxation
 
-The next major feature is direct pointer interaction with the surface.
+The next major physics feature is smoothing the local particle configuration to produce softer folds and reduce harsh or noisy deformation.
 
-Target behavior:
+Target concept:
 
 ```text
-pointer
-   ↓
-raycast
-   ↓
-surface intersection
-   ↓
-particles inside grab radius
-   ↓
-weighted deformation
+       neighbor
+          o
+          |
+neighbor--X--neighbor
+          |
+          o
+       neighbor
 ```
 
-The grab should affect a region rather than a single particle.
+For each movable particle, calculate a local neighborhood average and apply a small controlled correction toward that average.
 
-Particles closer to the interaction center should receive a stronger influence.
+Expected effects:
 
-Expected API direction:
+* softer folds
+* smoother wrinkle transitions
+* less angular deformation
+* more gel-like relaxation when desired
+* behavior closer to HoloCloth
 
-```ts
-surface.grab(...)
-surface.moveGrab(...)
-surface.release()
-```
+Smoothing must:
 
-The interaction system should remain renderer-independent where possible. Three.js should only handle raycasting and conversion from pointer coordinates to a world-space target.
+* preserve pinned particles
+* remain optional/configurable
+* avoid excessive surface shrinkage
+* remain renderer-independent
+
+It should eventually become another material parameter rather than a hardcoded solver behavior.
 
 ---
 
@@ -363,16 +573,19 @@ The interaction system should remain renderer-independent where possible. Three.
 [x] Three.js playground
 [x] Material presets
 [x] Stiffness normalization
+[x] Mouse grab
+[x] Weighted grab radius
+[x] Three.js pointer interaction
+[x] Camera orbit / inspection controls
 
-[ ] Mouse grab
-[ ] Weighted grab radius
 [ ] Surface smoothing / relaxation
+[ ] Better material tuning
 [ ] Push / pull forces
 [ ] Wind / force fields
-[ ] Better material tuning
 [ ] Pinning API improvements
 [ ] Collision primitives
 [ ] Performance benchmarks
+[ ] Pointer interaction automated tests
 [ ] React Three Fiber adapter
 [ ] Documentation
 [ ] npm publishing
@@ -400,5 +613,7 @@ Renderer-specific behavior belongs in adapters such as:
 @softsurface/three
 @softsurface/react-three-fiber
 ```
+
+Three.js may determine **where** an interaction occurs, but the physics engine must determine **how the surface reacts**.
 
 This separation is considered a fundamental architectural constraint of SoftSurface.
