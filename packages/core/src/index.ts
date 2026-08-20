@@ -45,3 +45,8 @@ export {
   SurfaceRelaxation,
   type SurfaceRelaxationOptions,
 } from "./SurfaceRelaxation.js";
+
+export {
+  DihedralBendingConstraint,
+  computeDihedralAngle,
+} from "./DihedralBendingConstraint.js";
