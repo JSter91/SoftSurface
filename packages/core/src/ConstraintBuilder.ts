@@ -1,19 +1,24 @@
 import { DistanceConstraint } from "./DistanceConstraint.js";
 import { ParticleGrid } from "./ParticleGrid.js";
 import type { Constraint } from "./Constraint.js";
+import {
+  buildGridDihedralConstraints,
+} from "./DihedralConstraintBuilder.js";
 
+export type BendModel =
+  | "distance"
+  | "dihedral";
 export interface GridConstraintOptions {
   structuralStiffness?: number;
   shearStiffness?: number;
   bendStiffness?: number;
+  bendModel?: BendModel;
 }
-
 export interface GridConstraints {
-  structural: Constraint[];
-  shear: Constraint[];
+  structural: DistanceConstraint[];
+  shear: DistanceConstraint[];
   bend: Constraint[];
 }
-
 export function createGridConstraints(
   grid: ParticleGrid,
   options: GridConstraintOptions = {},
@@ -22,11 +27,12 @@ export function createGridConstraints(
     structuralStiffness = 1,
     shearStiffness = 0.85,
     bendStiffness = 0.35,
+    bendModel = "distance",
   } = options;
 
   const structural: DistanceConstraint[] = [];
   const shear: DistanceConstraint[] = [];
-  const bend: DistanceConstraint[] = [];
+  const bend: Constraint[] = [];
 
   const spacingX = grid.width / grid.segmentsX;
   const spacingY = grid.height / grid.segmentsY;
@@ -93,36 +99,41 @@ export function createGridConstraints(
   }
 
   // Bend constraints
-  for (let y = 0; y < grid.rows; y++) {
-    for (let x = 0; x < grid.columns; x++) {
-      const current = grid.getParticleIndex(x, y);
+  if (bendModel === "distance") {
+    for (let y = 0; y < grid.rows; y++) {
+      for (let x = 0; x < grid.columns; x++) {
+        const current = grid.getParticleIndex(x, y);
 
-      // Two particles apart horizontally
-      if (x < grid.columns - 2) {
-        bend.push(
-          new DistanceConstraint(
-            current,
-            grid.getParticleIndex(x + 2, y),
-            spacingX * 2,
-            bendStiffness,
-          ),
-        );
-      }
+        // Two particles apart horizontally
+        if (x < grid.columns - 2) {
+          bend.push(
+            new DistanceConstraint(
+              current,
+              grid.getParticleIndex(x + 2, y),
+              spacingX * 2,
+              bendStiffness,
+            ),
+          );
+        }
 
-      // Two particles apart vertically
-      if (y < grid.rows - 2) {
-        bend.push(
-          new DistanceConstraint(
-            current,
-            grid.getParticleIndex(x, y + 2),
-            spacingY * 2,
-            bendStiffness,
-          ),
-        );
+        // Two particles apart vertically
+        if (y < grid.rows - 2) {
+          bend.push(
+            new DistanceConstraint(
+              current,
+              grid.getParticleIndex(x, y + 2),
+              spacingY * 2,
+              bendStiffness,
+            ),
+          );
+        }
       }
     }
+  } else if (bendModel === "dihedral") {
+    bend.push(...buildGridDihedralConstraints(grid, bendStiffness));
+  } else {
+    throw new RangeError(`Unknown bend model: ${String(bendModel)}`);
   }
-
   return {
     structural,
     shear,

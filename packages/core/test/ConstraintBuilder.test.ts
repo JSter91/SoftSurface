@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-
+import { DistanceConstraint } from "../src/DistanceConstraint.js";
 import { createGridConstraints } from "../src/ConstraintBuilder.js";
 import { ParticleGrid } from "../src/ParticleGrid.js";
+import { DihedralBendingConstraint } from "../src/DihedralBendingConstraint.js";
 
 describe("createGridConstraints", () => {
   it("creates the expected constraints for a 1x1 segmented grid", () => {
@@ -81,15 +82,29 @@ describe("createGridConstraints", () => {
     ).toBe(true);
 
     expect(
-      constraints.shear.every(
-        (constraint) => constraint.stiffness === 0.7,
-      ),
+      constraints.shear.every((constraint) => constraint.stiffness === 0.7),
     ).toBe(true);
 
     expect(
-      constraints.bend.every(
-        (constraint) => constraint.stiffness === 0.2,
-      ),
+      constraints.bend.every((constraint) => constraint.stiffness === 0.2),
     ).toBe(true);
+  });
+
+  it("can use dihedral bending constraints", () => {
+    const grid = new ParticleGrid({
+      width: 1,
+      height: 1,
+      segmentsX: 1,
+      segmentsY: 1,
+    });
+
+    const constraints = createGridConstraints(grid, {
+      bendModel: "dihedral",
+      bendStiffness: 0.5,
+    });
+
+    expect(constraints.bend).toHaveLength(1);
+
+    expect(constraints.bend[0]).toBeInstanceOf(DihedralBendingConstraint);
   });
 });

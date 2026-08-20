@@ -30,6 +30,7 @@ import {
   SurfaceRelaxation,
   type SurfaceRelaxationOptions,
 } from "./SurfaceRelaxation.js";
+
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
   preset?: SoftSurfacePreset;
@@ -82,6 +83,7 @@ export class SoftSurface {
       structuralStiffness: structuralStiffness,
       shearStiffness: shearStiffness,
       bendStiffness: bendStiffness,
+      bendModel: options.bendModel,
     });
 
     this.integrator = new VerletIntegrator({
