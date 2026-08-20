@@ -89,58 +89,75 @@ const material = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide,
 });
 
+type BendModel = "distance" | "dihedral";
+
+interface PlaygroundSettings {
+  preset: SoftSurfacePreset;
+
+  segmentsX: number;
+  segmentsY: number;
+
+  gravityY: number;
+
+  iterations: number;
+
+  fixedTimeStep: number;
+  maxSubsteps: number;
+
+  relaxation: number;
+
+  bendModel: BendModel;
+  bendStiffness: number;
+}
+
+const settings: PlaygroundSettings = {
+  preset: "cloth",
+
+  segmentsX: 48,
+  segmentsY: 36,
+
+  gravityY: 0,
+
+  iterations: 1,
+
+  fixedTimeStep: 1 / 120,
+  maxSubsteps: 4,
+
+  relaxation: 0.5,
+
+  bendModel: "dihedral",
+  bendStiffness: 0.3,
+};
+
 /**
  * Surface factory
  */
-function createSurface(preset: SoftSurfacePreset): {
+function createSurface(): {
   surface: SoftSurface;
   geometry: SoftSurfaceGeometry;
 } {
-  /* gravity 1 */
-  // const surface =
-  //   new SoftSurface({
-  //     width: 4,
-  //     height: 3,
-
-  //     segmentsX: 30,
-  //     segmentsY: 22,
-
-  //     preset,
-
-  //     acceleration: [
-  //       0,
-  //       -9.81,
-  //       0,
-  //     ],
-
-  //     iterations: 10,
-
-  //     fixedTimeStep: 1 / 120,
-  //     maxSubsteps: 4,
-
-  //     relaxation: 0.025
-  //   });
-
-  /* gravity 0 */
   const surface = new SoftSurface({
     width: 4,
     height: 3,
 
-    segmentsX: 48,
-    segmentsY: 36,
+    segmentsX: settings.segmentsX,
+    segmentsY: settings.segmentsY,
 
-    preset,
+    preset: settings.preset,
 
-    acceleration: [0, 0, 0],
+    acceleration: [0, settings.gravityY, 0],
 
-    iterations: 1,
+    iterations: settings.iterations,
 
-    fixedTimeStep: 1 / 120,
-    maxSubsteps: 4,
+    fixedTimeStep: settings.fixedTimeStep,
 
-    relaxation: 0.5,
-    bendModel: "dihedral",
-    bendStiffness: 0.3,
+    maxSubsteps: settings.maxSubsteps,
+
+    relaxation: settings.relaxation,
+
+    bendModel: settings.bendModel,
+
+    bendStiffness: settings.bendStiffness,
   });
 
   const topLeft = surface.grid.getParticleIndex(0, 0);
@@ -148,7 +165,6 @@ function createSurface(preset: SoftSurfacePreset): {
   const topRight = surface.grid.getParticleIndex(surface.grid.columns - 1, 0);
 
   surface.pin(topLeft);
-
   surface.pin(topRight);
 
   const geometry = new SoftSurfaceGeometry(surface);
@@ -162,9 +178,8 @@ function createSurface(preset: SoftSurfacePreset): {
 /**
  * Initial surface
  */
-let currentPreset: SoftSurfacePreset = "cloth";
 
-let { surface, geometry } = createSurface(currentPreset);
+let { surface, geometry } = createSurface();
 
 const mesh = new THREE.Mesh(geometry, material);
 mesh.frustumCulled = false;
@@ -203,51 +218,50 @@ function createInteraction(): SoftSurfacePointerInteraction {
 let interaction = createInteraction();
 
 /**
- * Preset UI
+ * Playground UI
  */
 const uiControls = document.createElement("div");
 
 uiControls.className = "controls";
 
-const label = document.createElement("label");
+const title = document.createElement("h2");
 
-label.textContent = "Material";
+title.textContent = "SoftSurface";
 
-const select = document.createElement("select");
+uiControls.appendChild(title);
 
-const presets: SoftSurfacePreset[] = [
-  "cloth",
-  "silk",
-  "paper",
-  "rubber",
-  "gel",
-];
+const subtitle = document.createElement("div");
 
-for (const preset of presets) {
-  const option = document.createElement("option");
+subtitle.className = "controls-subtitle";
 
-  option.value = preset;
+subtitle.textContent = "Physics Playground";
 
-  option.textContent = preset;
-
-  select.appendChild(option);
-}
-
-select.value = currentPreset;
-
-label.appendChild(select);
-
-uiControls.appendChild(label);
-
-document.body.appendChild(uiControls);
+uiControls.appendChild(subtitle);
 
 /**
- * Change material
+ * Surface rebuild
+ *
+ * Slider events may fire many times in the same
+ * frame. Rebuild at most once per animation frame.
  */
-select.addEventListener("change", () => {
-  currentPreset = select.value as SoftSurfacePreset;
+let rebuildQueued = false;
 
-  const next = createSurface(currentPreset);
+function scheduleSurfaceRebuild(): void {
+  if (rebuildQueued) {
+    return;
+  }
+
+  rebuildQueued = true;
+
+  requestAnimationFrame(() => {
+    rebuildQueued = false;
+
+    rebuildSurface();
+  });
+}
+
+function rebuildSurface(): void {
+  const next = createSurface();
 
   const oldGeometry = geometry;
 
@@ -262,7 +276,313 @@ select.addEventListener("change", () => {
   interaction = createInteraction();
 
   oldGeometry.dispose();
-});
+}
+
+/**
+ * UI helpers
+ */
+function createSection(titleText: string): HTMLElement {
+  const section = document.createElement("section");
+
+  section.className = "controls-section";
+
+  const heading = document.createElement("h3");
+
+  heading.textContent = titleText;
+
+  section.appendChild(heading);
+
+  return section;
+}
+
+function createSelectControl<T extends string>(
+  labelText: string,
+  value: T,
+  options: readonly T[],
+  onChange: (value: T) => void,
+): HTMLElement {
+  const row = document.createElement("label");
+
+  row.className = "control-row";
+
+  const name = document.createElement("span");
+
+  name.textContent = labelText;
+
+  const select = document.createElement("select");
+
+  for (const optionValue of options) {
+    const option = document.createElement("option");
+
+    option.value = optionValue;
+
+    option.textContent = optionValue;
+
+    select.appendChild(option);
+  }
+
+  select.value = value;
+
+  select.addEventListener("change", () => {
+    onChange(select.value as T);
+  });
+
+  row.append(name, select);
+
+  return row;
+}
+
+function createRangeControl(
+  labelText: string,
+  value: number,
+  minimum: number,
+  maximum: number,
+  step: number,
+  onChange: (value: number) => void,
+  digits = 2,
+): HTMLElement {
+  const wrapper = document.createElement("div");
+
+  wrapper.className = "range-control";
+
+  const header = document.createElement("div");
+
+  header.className = "range-header";
+
+  const name = document.createElement("span");
+
+  name.textContent = labelText;
+
+  const output = document.createElement("span");
+
+  output.className = "range-value";
+
+  output.textContent = value.toFixed(digits);
+
+  header.append(name, output);
+
+  const input = document.createElement("input");
+
+  input.type = "range";
+
+  input.min = String(minimum);
+
+  input.max = String(maximum);
+
+  input.step = String(step);
+
+  input.value = String(value);
+
+  input.addEventListener("input", () => {
+    const next = input.valueAsNumber;
+
+    output.textContent = next.toFixed(digits);
+
+    onChange(next);
+  });
+
+  wrapper.append(header, input);
+
+  return wrapper;
+}
+
+function createNumberControl(
+  labelText: string,
+  value: number,
+  minimum: number,
+  maximum: number,
+  onChange: (value: number) => void,
+): HTMLElement {
+  const row = document.createElement("label");
+
+  row.className = "control-row";
+
+  const name = document.createElement("span");
+
+  name.textContent = labelText;
+
+  const input = document.createElement("input");
+
+  input.type = "number";
+
+  input.min = String(minimum);
+
+  input.max = String(maximum);
+
+  input.step = "1";
+
+  input.value = String(value);
+
+  input.addEventListener("change", () => {
+    const next = Math.min(
+      maximum,
+      Math.max(minimum, Math.round(input.valueAsNumber)),
+    );
+
+    input.value = String(next);
+
+    onChange(next);
+  });
+
+  row.append(name, input);
+
+  return row;
+}
+
+/**
+ * Material
+ */
+const materialSection = createSection("Material");
+
+materialSection.appendChild(
+  createSelectControl(
+    "Preset",
+    settings.preset,
+    ["cloth", "silk", "paper", "rubber", "gel"] satisfies SoftSurfacePreset[],
+    (value) => {
+      settings.preset = value;
+
+      scheduleSurfaceRebuild();
+    },
+  ),
+);
+
+uiControls.appendChild(materialSection);
+
+/**
+ Bending
+ */
+const bendingSection = createSection("Bending");
+
+bendingSection.appendChild(
+  createSelectControl(
+    "Model",
+    settings.bendModel,
+    ["distance", "dihedral"] satisfies BendModel[],
+    (value) => {
+      settings.bendModel = value;
+
+      scheduleSurfaceRebuild();
+    },
+  ),
+);
+
+bendingSection.appendChild(
+  createRangeControl(
+    "Stiffness",
+    settings.bendStiffness,
+    0,
+    0.6,
+    0.01,
+    (value) => {
+      settings.bendStiffness = value;
+
+      scheduleSurfaceRebuild();
+    },
+  ),
+);
+
+bendingSection.appendChild(
+  createRangeControl("Relaxation", settings.relaxation, 0, 1, 0.01, (value) => {
+    settings.relaxation = value;
+
+    scheduleSurfaceRebuild();
+  }),
+);
+
+uiControls.appendChild(bendingSection);
+
+/**
+ * Solver
+ */
+const solverSection = createSection("Solver");
+
+solverSection.appendChild(
+  createRangeControl(
+    "Iterations",
+    settings.iterations,
+    1,
+    10,
+    1,
+    (value) => {
+      settings.iterations = value;
+
+      scheduleSurfaceRebuild();
+    },
+    0,
+  ),
+);
+
+solverSection.appendChild(
+  createRangeControl(
+    "Gravity Y",
+    settings.gravityY,
+    -10,
+    10,
+    0.1,
+    (value) => {
+      settings.gravityY = value;
+
+      scheduleSurfaceRebuild();
+    },
+    1,
+  ),
+);
+
+solverSection.appendChild(
+  createNumberControl("Max substeps", settings.maxSubsteps, 1, 10, (value) => {
+    settings.maxSubsteps = value;
+
+    scheduleSurfaceRebuild();
+  }),
+);
+
+uiControls.appendChild(solverSection);
+
+/**
+ * Resolution
+ */
+const resolutionSection = createSection("Resolution");
+
+resolutionSection.appendChild(
+  createNumberControl("Segments X", settings.segmentsX, 4, 100, (value) => {
+    settings.segmentsX = value;
+
+    scheduleSurfaceRebuild();
+  }),
+);
+
+resolutionSection.appendChild(
+  createNumberControl("Segments Y", settings.segmentsY, 4, 100, (value) => {
+    settings.segmentsY = value;
+
+    scheduleSurfaceRebuild();
+  }),
+);
+
+uiControls.appendChild(resolutionSection);
+
+/**
+ * Performance HUD
+ */
+const performanceSection = createSection("Performance");
+
+const performanceOutput = document.createElement("pre");
+
+performanceOutput.className = "performance-output";
+
+performanceOutput.textContent = [
+  "FPS       --",
+  "Physics   --",
+  "Geometry  --",
+  "Render    --",
+].join("\n");
+
+performanceSection.appendChild(performanceOutput);
+
+uiControls.appendChild(performanceSection);
+
+document.body.appendChild(uiControls);
 
 /**
  * Simulation
@@ -314,58 +634,49 @@ function animate() {
 
   const renderEnd = performance.now();
 
-  const physicsTime =
-    physicsEnd - physicsStart;
+  const physicsTime = physicsEnd - physicsStart;
 
-  const geometryTime =
-    geometryEnd - physicsEnd;
+  const geometryTime = geometryEnd - physicsEnd;
 
-  const renderTime =
-    renderEnd - geometryEnd;
+  const renderTime = renderEnd - geometryEnd;
 
   physicsTotal += physicsTime;
   geometryTotal += geometryTime;
   renderTotal += renderTime;
 
-  physicsMax =
-    Math.max(physicsMax, physicsTime);
+  physicsMax = Math.max(physicsMax, physicsTime);
 
-  geometryMax =
-    Math.max(geometryMax, geometryTime);
+  geometryMax = Math.max(geometryMax, geometryTime);
 
-  renderMax =
-    Math.max(renderMax, renderTime);
+  renderMax = Math.max(renderMax, renderTime);
 
   measuredFrames++;
 
   const now = performance.now();
 
   if (now - lastReportTime >= 1000) {
-    console.table({
-      physics: {
-        avgMs:
-          physicsTotal /
-          measuredFrames,
-        maxMs:
-          physicsMax,
-      },
+    const elapsed = now - lastReportTime;
 
-      geometry: {
-        avgMs:
-          geometryTotal /
-          measuredFrames,
-        maxMs:
-          geometryMax,
-      },
+    const physicsAverage = physicsTotal / measuredFrames;
 
-      render: {
-        avgMs:
-          renderTotal /
-          measuredFrames,
-        maxMs:
-          renderMax,
-      },
-    });
+    const geometryAverage = geometryTotal / measuredFrames;
+
+    const renderAverage = renderTotal / measuredFrames;
+
+    const fps = measuredFrames / (elapsed / 1000);
+
+    performanceOutput.textContent = [
+      `FPS       ${fps.toFixed(1)}`,
+      "",
+      `Physics   ${physicsAverage.toFixed(2)} ms`,
+      `          max ${physicsMax.toFixed(2)} ms`,
+      "",
+      `Geometry  ${geometryAverage.toFixed(2)} ms`,
+      `          max ${geometryMax.toFixed(2)} ms`,
+      "",
+      `Render    ${renderAverage.toFixed(2)} ms`,
+      `          max ${renderMax.toFixed(2)} ms`,
+    ].join("\n");
 
     physicsTotal = 0;
     geometryTotal = 0;
@@ -376,6 +687,7 @@ function animate() {
     renderMax = 0;
 
     measuredFrames = 0;
+
     lastReportTime = now;
   }
 }
