@@ -6,13 +6,37 @@ export interface ConstraintSolverOptions {
   iterations?: number;
 }
 
+interface PreparedConstraint {
+  constraint: Constraint;
+  iterationStiffness: number;
+}
+
+interface PreparedConstraints {
+  structural: PreparedConstraint[];
+  shear: PreparedConstraint[];
+  bend: PreparedConstraint[];
+}
+
 export class ConstraintSolver {
   private readonly iterations: number;
 
-  constructor(options: ConstraintSolverOptions = {}) {
+  private cachedSource:
+    | GridConstraints
+    | null = null;
+
+  private prepared:
+    | PreparedConstraints
+    | null = null;
+
+  constructor(
+    options: ConstraintSolverOptions = {},
+  ) {
     const { iterations = 8 } = options;
 
-    if (!Number.isInteger(iterations) || iterations < 1) {
+    if (
+      !Number.isInteger(iterations) ||
+      iterations < 1
+    ) {
       throw new RangeError(
         "iterations must be a positive integer",
       );
@@ -25,51 +49,123 @@ export class ConstraintSolver {
     grid: ParticleGrid,
     constraints: GridConstraints,
   ): void {
-    const { positions, inverseMasses } = grid;
+    const {
+      positions,
+      inverseMasses,
+    } = grid;
+
+    /*
+     * Constraint stiffness and solver iteration count
+     * are constant for a SoftSurface instance.
+     *
+     * Prepare the per-iteration stiffness once instead
+     * of recalculating Math.pow() inside the hot loop.
+     */
+    if (
+      this.cachedSource !== constraints ||
+      this.prepared === null
+    ) {
+      this.prepared =
+        this.prepareConstraints(
+          constraints,
+        );
+
+      this.cachedSource =
+        constraints;
+    }
+
+    const {
+      structural,
+      shear,
+      bend,
+    } = this.prepared;
 
     for (
       let iteration = 0;
-      iteration < this.iterations;
+      iteration <
+      this.iterations;
       iteration++
     ) {
-      solveConstraintGroup(
-        constraints.structural,
+      solvePreparedGroup(
+        structural,
         positions,
         inverseMasses,
-        this.iterations,
       );
 
-      solveConstraintGroup(
-        constraints.shear,
+      solvePreparedGroup(
+        shear,
         positions,
         inverseMasses,
-        this.iterations,
       );
 
-      solveConstraintGroup(
-        constraints.bend,
+      solvePreparedGroup(
+        bend,
         positions,
         inverseMasses,
-        this.iterations,
       );
     }
   }
+
+  private prepareConstraints(
+    constraints: GridConstraints,
+  ): PreparedConstraints {
+    return {
+      structural:
+        prepareConstraintGroup(
+          constraints.structural,
+          this.iterations,
+        ),
+
+      shear:
+        prepareConstraintGroup(
+          constraints.shear,
+          this.iterations,
+        ),
+
+      bend:
+        prepareConstraintGroup(
+          constraints.bend,
+          this.iterations,
+        ),
+    };
+  }
 }
 
-function solveConstraintGroup(
+function prepareConstraintGroup(
   constraints: readonly Constraint[],
+  iterations: number,
+): PreparedConstraint[] {
+  return constraints.map(
+    (constraint) => ({
+      constraint,
+      iterationStiffness:
+        getIterationStiffness(
+          constraint.stiffness,
+          iterations,
+        ),
+    }),
+  );
+}
+
+function solvePreparedGroup(
+  prepared: readonly PreparedConstraint[],
   positions: Float32Array,
   inverseMasses: Float32Array,
-  iterations: number,
 ): void {
-  for (const constraint of constraints) {
+  for (
+    let i = 0;
+    i < prepared.length;
+    i++
+  ) {
+    const {
+      constraint,
+      iterationStiffness,
+    } = prepared[i];
+
     constraint.solve(
       positions,
       inverseMasses,
-      getIterationStiffness(
-        constraint.stiffness,
-        iterations,
-      ),
+      iterationStiffness,
     );
   }
 }
