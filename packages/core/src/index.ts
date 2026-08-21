@@ -82,3 +82,12 @@ export {
 export type {
   PointTriangleResult,
 } from "./PointTriangleDistance.js";
+
+export {
+  SelfCollisionDetector,
+} from "./SelfCollisionDetector.js";
+
+export type {
+  SelfCollisionDetectorOptions,
+  SelfCollisionStats,
+} from "./SelfCollisionDetector.js";
