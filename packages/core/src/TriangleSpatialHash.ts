@@ -3,84 +3,61 @@ export interface TriangleSpatialHashOptions {
   padding?: number;
 }
 
-type TriangleIndexArray =
-  | Uint16Array
-  | Uint32Array
-  | readonly number[];
+type TriangleIndexArray = Uint16Array | Uint32Array | readonly number[];
 
 export class TriangleSpatialHash {
   private readonly cellSize: number;
   private readonly padding: number;
 
-  private readonly buckets =
-    new Map<number, number[]>();
+  private readonly buckets = new Map<number, number[]>();
 
-  constructor(
-    options: TriangleSpatialHashOptions,
-  ) {
-    const {
-      cellSize,
-      padding = 0,
-    } = options;
+  private readonly activeBuckets: number[][] = [];
+
+  private readonly bucketPool: number[][] = [];
+
+  constructor(options: TriangleSpatialHashOptions) {
+    const { cellSize, padding = 0 } = options;
 
     if (cellSize <= 0) {
-      throw new RangeError(
-        "cellSize must be greater than 0",
-      );
+      throw new RangeError("cellSize must be greater than 0");
     }
 
     if (padding < 0) {
-      throw new RangeError(
-        "padding must be non-negative",
-      );
+      throw new RangeError("padding must be non-negative");
     }
 
     this.cellSize = cellSize;
     this.padding = padding;
   }
 
-  build(
-    positions: Float32Array,
-    triangles: TriangleIndexArray,
-  ): void {
+  build(positions: Float32Array, triangles: TriangleIndexArray): void {
     if (triangles.length % 3 !== 0) {
-      throw new Error(
-        "triangle index array length must be divisible by 3",
-      );
+      throw new Error("triangle index array length must be divisible by 3");
     }
 
-    this.buckets.clear();
-
-    const triangleCount =
-      triangles.length / 3;
+    this.recycleBuckets();
+    const triangleCount = triangles.length / 3;
 
     for (
       let triangleIndex = 0;
       triangleIndex < triangleCount;
       triangleIndex++
     ) {
-      const indexOffset =
-        triangleIndex * 3;
+      const indexOffset = triangleIndex * 3;
 
-      const a =
-        triangles[indexOffset];
+      const a = triangles[indexOffset];
 
-      const b =
-        triangles[indexOffset + 1];
+      const b = triangles[indexOffset + 1];
 
-      const c =
-        triangles[indexOffset + 2];
+      const c = triangles[indexOffset + 2];
 
       const aOffset = a * 3;
       const bOffset = b * 3;
       const cOffset = c * 3;
 
       const minX =
-        Math.min(
-          positions[aOffset],
-          positions[bOffset],
-          positions[cOffset],
-        ) - this.padding;
+        Math.min(positions[aOffset], positions[bOffset], positions[cOffset]) -
+        this.padding;
 
       const minY =
         Math.min(
@@ -97,11 +74,8 @@ export class TriangleSpatialHash {
         ) - this.padding;
 
       const maxX =
-        Math.max(
-          positions[aOffset],
-          positions[bOffset],
-          positions[cOffset],
-        ) + this.padding;
+        Math.max(positions[aOffset], positions[bOffset], positions[cOffset]) +
+        this.padding;
 
       const maxY =
         Math.max(
@@ -117,107 +91,72 @@ export class TriangleSpatialHash {
           positions[cOffset + 2],
         ) + this.padding;
 
-      const minCellX =
-        this.toCell(minX);
+      const minCellX = this.toCell(minX);
 
-      const minCellY =
-        this.toCell(minY);
+      const minCellY = this.toCell(minY);
 
-      const minCellZ =
-        this.toCell(minZ);
+      const minCellZ = this.toCell(minZ);
 
-      const maxCellX =
-        this.toCell(maxX);
+      const maxCellX = this.toCell(maxX);
 
-      const maxCellY =
-        this.toCell(maxY);
+      const maxCellY = this.toCell(maxY);
 
-      const maxCellZ =
-        this.toCell(maxZ);
+      const maxCellZ = this.toCell(maxZ);
 
-      for (
-        let z = minCellZ;
-        z <= maxCellZ;
-        z++
-      ) {
-        for (
-          let y = minCellY;
-          y <= maxCellY;
-          y++
-        ) {
-          for (
-            let x = minCellX;
-            x <= maxCellX;
-            x++
-          ) {
-            const key =
-              hashCell(x, y, z);
+      for (let z = minCellZ; z <= maxCellZ; z++) {
+        for (let y = minCellY; y <= maxCellY; y++) {
+          for (let x = minCellX; x <= maxCellX; x++) {
+            const key = hashCell(x, y, z);
 
-            let bucket =
-              this.buckets.get(key);
+            let bucket = this.buckets.get(key);
 
             if (!bucket) {
-              bucket = [];
+              bucket = this.bucketPool.pop() ?? [];
 
-              this.buckets.set(
-                key,
-                bucket,
-              );
+              this.buckets.set(key, bucket);
+
+              this.activeBuckets.push(bucket);
             }
-
-            bucket.push(
-              triangleIndex,
-            );
+            bucket.push(triangleIndex);
           }
         }
       }
     }
   }
 
-  queryPoint(
-    x: number,
-    y: number,
-    z: number,
-  ): readonly number[] {
-    const key =
-      hashCell(
-        this.toCell(x),
-        this.toCell(y),
-        this.toCell(z),
-      );
+  queryPoint(x: number, y: number, z: number): readonly number[] {
+    const key = hashCell(this.toCell(x), this.toCell(y), this.toCell(z));
 
-    return (
-      this.buckets.get(key) ??
-      EMPTY_RESULTS
-    );
+    return this.buckets.get(key) ?? EMPTY_RESULTS;
   }
 
   clear(): void {
-    this.buckets.clear();
+    this.recycleBuckets();
   }
 
-  private toCell(
-    value: number,
-  ): number {
-    return Math.floor(
-      value / this.cellSize,
-    );
+  private recycleBuckets(): void {
+    for (const bucket of this.activeBuckets) {
+      bucket.length = 0;
+
+      this.bucketPool.push(bucket);
+    }
+
+    this.activeBuckets.length = 0;
+
+    this.buckets.clear();
+  }
+  private toCell(value: number): number {
+    return Math.floor(value / this.cellSize);
   }
 }
 
-const EMPTY_RESULTS:
-  readonly number[] = [];
+const EMPTY_RESULTS: readonly number[] = [];
 
-function hashCell(
-  x: number,
-  y: number,
-  z: number,
-): number {
+function hashCell(x: number, y: number, z: number): number {
   return (
-    (
-      Math.imul(x, 73856093) ^
+    (Math.imul(x, 73856093) ^
       Math.imul(y, 19349663) ^
-      Math.imul(z, 83492791)
-    ) >>> 0
+      Math.imul(z, 83492791)) >>>
+    0
   );
 }

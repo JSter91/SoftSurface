@@ -74,3 +74,11 @@ export {
 export type {
   TriangleIndices,
 } from "./GridTopology.js";
+
+export {
+  pointTriangleDistanceSquared,
+} from "./PointTriangleDistance.js";
+
+export type {
+  PointTriangleResult,
+} from "./PointTriangleDistance.js";
