@@ -17,10 +17,13 @@ export interface SelfCollisionStats {
   testedPairs: number;
   contacts: number;
 
+  aabbRejected: number;
+
   hashBuildMs: number;
   narrowPhaseMs: number;
   totalMs: number;
 }
+
 export class SelfCollisionDetector {
   private readonly visitedTriangles: Uint32Array;
 
@@ -58,6 +61,9 @@ export class SelfCollisionDetector {
     candidatePairs: 0,
     testedPairs: 0,
     contacts: 0,
+
+    aabbRejected: 0,
+
     hashBuildMs: 0,
     narrowPhaseMs: 0,
     totalMs: 0,
@@ -67,77 +73,178 @@ export class SelfCollisionDetector {
     private readonly triangles: TriangleIndices,
     options: SelfCollisionDetectorOptions,
   ) {
-    const { thickness, cellSize } = options;
+    const {
+      thickness,
+      cellSize,
+    } = options;
 
     if (thickness <= 0) {
-      throw new RangeError("thickness must be greater than 0");
+      throw new RangeError(
+        "thickness must be greater than 0",
+      );
     }
 
     if (cellSize <= 0) {
-      throw new RangeError("cellSize must be greater than 0");
+      throw new RangeError(
+        "cellSize must be greater than 0",
+      );
     }
 
-    this.thicknessSquared = thickness * thickness;
+    this.thicknessSquared =
+      thickness * thickness;
 
-    this.spatialHash = new TriangleSpatialHash({
-      cellSize,
-      padding: thickness,
-    });
+    this.spatialHash =
+      new TriangleSpatialHash({
+        cellSize,
+        padding: thickness,
+      });
 
-    this.visitedTriangles = new Uint32Array(triangles.length / 3);
+    this.visitedTriangles =
+      new Uint32Array(
+        triangles.length / 3,
+      );
   }
 
-  detect(positions: Float32Array): SelfCollisionStats {
-    const buildStart = performance.now();
+  detect(
+    positions: Float32Array,
+  ): SelfCollisionStats {
+    const buildStart =
+      performance.now();
 
-    this.spatialHash.build(positions, this.triangles);
+    this.spatialHash.build(
+      positions,
+      this.triangles,
+    );
 
-    const buildEnd = performance.now();
+    const buildEnd =
+      performance.now();
 
     const stats = this.stats;
 
     stats.candidatePairs = 0;
     stats.testedPairs = 0;
     stats.contacts = 0;
+    stats.aabbRejected = 0;
 
-    const particleCount = positions.length / 3;
+    const particleCount =
+      positions.length / 3;
 
-    for (let particle = 0; particle < particleCount; particle++) {
-      const visitStamp = this.nextVisitStamp();
+    for (
+      let particle = 0;
+      particle < particleCount;
+      particle++
+    ) {
+      const visitStamp =
+        this.nextVisitStamp();
 
-      const particleOffset = particle * 3;
+      const particleOffset =
+        particle * 3;
 
-      const px = positions[particleOffset];
+      const px =
+        positions[particleOffset];
 
-      const py = positions[particleOffset + 1];
+      const py =
+        positions[
+          particleOffset + 1
+        ];
 
-      const pz = positions[particleOffset + 2];
+      const pz =
+        positions[
+          particleOffset + 2
+        ];
 
-      const candidates = this.spatialHash.queryPoint(px, py, pz);
+      const candidates =
+        this.spatialHash.queryPoint(
+          px,
+          py,
+          pz,
+        );
 
-      stats.candidatePairs += candidates.length;
+      stats.candidatePairs +=
+        candidates.length;
 
-      for (let i = 0; i < candidates.length; i++) {
-        const triangleIndex = candidates[i];
+      for (
+        let i = 0;
+        i < candidates.length;
+        i++
+      ) {
+        const triangleIndex =
+          candidates[i];
 
-        if (this.visitedTriangles[triangleIndex] === visitStamp) {
+        /**
+         * Different spatial cells can hash to the same
+         * numeric key, so the same triangle may appear
+         * more than once among the candidates.
+         */
+        if (
+          this.visitedTriangles[
+            triangleIndex
+          ] === visitStamp
+        ) {
           continue;
         }
 
-        this.visitedTriangles[triangleIndex] = visitStamp;
+        this.visitedTriangles[
+          triangleIndex
+        ] = visitStamp;
 
-        const indexOffset = triangleIndex * 3;
+        const indexOffset =
+          triangleIndex * 3;
 
-        const a = this.triangles[indexOffset];
+        const a =
+          this.triangles[
+            indexOffset
+          ];
 
-        const b = this.triangles[indexOffset + 1];
+        const b =
+          this.triangles[
+            indexOffset + 1
+          ];
 
-        const c = this.triangles[indexOffset + 2];
+        const c =
+          this.triangles[
+            indexOffset + 2
+          ];
 
-        if (particle === a || particle === b || particle === c) {
+        /**
+         * A vertex must not collide with a triangle
+         * containing that same vertex.
+         */
+        if (
+          particle === a ||
+          particle === b ||
+          particle === c
+        ) {
           continue;
         }
 
+        /**
+         * Spatial-hash membership only tells us that
+         * the particle and triangle overlap the same
+         * hash cell.
+         *
+         * Reject the candidate if the particle lies
+         * outside the triangle's padded AABB before
+         * running the more expensive point-triangle
+         * distance calculation.
+         */
+        if (
+          !this.spatialHash.containsPoint(
+            triangleIndex,
+            px,
+            py,
+            pz,
+          )
+        ) {
+          stats.aabbRejected++;
+
+          continue;
+        }
+
+        /**
+         * Only candidates surviving the AABB filter
+         * reach the actual narrow-phase distance test.
+         */
         stats.testedPairs++;
 
         const aOffset = a * 3;
@@ -164,29 +271,45 @@ export class SelfCollisionDetector {
           this.result,
         );
 
-        if (!Number.isFinite(this.result.distanceSquared)) {
+        /**
+         * Degenerate geometry can produce invalid
+         * numerical results.
+         */
+        if (
+          !Number.isFinite(
+            this.result.distanceSquared,
+          )
+        ) {
           continue;
         }
 
-        if (this.result.distanceSquared < this.thicknessSquared) {
+        if (
+          this.result.distanceSquared <
+          this.thicknessSquared
+        ) {
           stats.contacts++;
         }
       }
     }
 
-    const detectEnd = performance.now();
+    const detectEnd =
+      performance.now();
 
-    stats.hashBuildMs = buildEnd - buildStart;
+    stats.hashBuildMs =
+      buildEnd - buildStart;
 
-    stats.narrowPhaseMs = detectEnd - buildEnd;
+    stats.narrowPhaseMs =
+      detectEnd - buildEnd;
 
-    stats.totalMs = detectEnd - buildStart;
+    stats.totalMs =
+      detectEnd - buildStart;
 
     return stats;
   }
 
   private nextVisitStamp(): number {
-    this.visitStamp = (this.visitStamp + 1) >>> 0;
+    this.visitStamp =
+      (this.visitStamp + 1) >>> 0;
 
     /**
      * Uint32 overflow.
@@ -195,7 +318,9 @@ export class SelfCollisionDetector {
      * buffer so stamp 0 never aliases old entries.
      */
     if (this.visitStamp === 0) {
-      this.visitedTriangles.fill(0);
+      this.visitedTriangles.fill(
+        0,
+      );
 
       this.visitStamp = 1;
     }
