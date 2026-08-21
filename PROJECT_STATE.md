@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-08-21
 
-**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection optimized with AABB prefilter; broad-phase benchmarking in progress
+**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection optimized with AABB prefilter and flat typed-array triangle spatial hash; deterministic performance baselines established; collision response is the next physics milestone
 
 ## Goal
 
@@ -10,19 +10,19 @@ SoftSurface is a lightweight, renderer-agnostic engine for real-time deformable 
 
 The goal is to support materials and behaviors such as:
 
-- cloth
+* cloth
 
-- silk
+* silk
 
-- paper
+* paper
 
-- rubber
+* rubber
 
-- gel
+* gel
 
-- membranes
+* membranes
 
-- interactive deformable surfaces
+* interactive deformable surfaces
 
 The physics engine must remain independent from rendering libraries such as Three.js.
 
@@ -60,41 +60,41 @@ Renderer-independent physics engine.
 
 Currently contains:
 
-- `ParticleGrid`
+* `ParticleGrid`
 
-- `VerletIntegrator`
+* `VerletIntegrator`
 
-- generic `Constraint` interface
+* generic `Constraint` interface
 
-- `DistanceConstraint`
+* `DistanceConstraint`
 
-- `DihedralBendingConstraint`
+* `DihedralBendingConstraint`
 
-- `ConstraintBuilder`
+* `ConstraintBuilder`
 
-- `DihedralConstraintBuilder`
+* `DihedralConstraintBuilder`
 
-- `ConstraintSolver`
+* `ConstraintSolver`
 
-- `SurfaceRelaxation`
+* `SurfaceRelaxation`
 
-- `SoftSurface`
+* `SoftSurface`
 
-- `GrabInteraction`
+* `GrabInteraction`
 
-- `GridTopology`
+* `GridTopology`
 
-- `TriangleSpatialHash`
+* `TriangleSpatialHash`
 
-- `PointTriangleDistance`
+* `PointTriangleDistance`
 
-- `SelfCollisionDetector`
+* `SelfCollisionDetector`
 
-- material presets
+* material presets
 
-- fixed timestep simulation
+* fixed timestep simulation
 
-- weighted grab interaction
+* weighted grab interaction
 
 The core has **no dependency on Three.js, React or the DOM**.
 
@@ -104,9 +104,9 @@ Three.js adapter.
 
 Currently contains:
 
-- `SoftSurfaceGeometry`
+* `SoftSurfaceGeometry`
 
-- `SoftSurfacePointerInteraction`
+* `SoftSurfacePointerInteraction`
 
 `SoftSurfaceGeometry` exposes the simulation's `Float32Array` directly as a Three.js `BufferAttribute`, avoiding a position-array copy on every frame.
 
@@ -140,15 +140,15 @@ SoftSurface grab API
 
 The physics core therefore remains unaware of:
 
-- pointers
+* pointers
 
-- DOM events
+* DOM events
 
-- cameras
+* cameras
 
-- raycasting
+* raycasting
 
-- Three.js meshes
+* Three.js meshes
 
 ### `apps/playground`
 
@@ -156,15 +156,15 @@ Vite + Three.js development environment.
 
 It is used only for:
 
-- visual testing
+* visual testing
 
-- material tuning
+* material tuning
 
-- interaction experiments
+* interaction experiments
 
-- performance testing
+* performance testing
 
-- examples
+* examples
 
 It is not part of the published library.
 
@@ -402,47 +402,47 @@ This allows it to resist stretching while still forming folds.
 
 **Cloth**
 
-- low stretch
+* low stretch
 
-- medium bend resistance
+* medium bend resistance
 
-- moderate movement
+* moderate movement
 
 **Silk**
 
-- low stretch
+* low stretch
 
-- very low bend resistance
+* very low bend resistance
 
-- easy folding
+* easy folding
 
-- light response
+* light response
 
 **Paper**
 
-- almost no stretch
+* almost no stretch
 
-- high bend resistance
+* high bend resistance
 
-- tends to retain flatter shapes
+* tends to retain flatter shapes
 
 **Rubber**
 
-- more stretch
+* more stretch
 
-- medium bend resistance
+* medium bend resistance
 
-- stronger elastic response
+* stronger elastic response
 
 **Gel**
 
-- moderate stretch
+* moderate stretch
 
-- low bend resistance
+* low bend resistance
 
-- high damping
+* high damping
 
-- slower / softer response
+* slower / softer response
 
 Preset values are still experimental and will continue to be tuned visually.
 
@@ -570,62 +570,64 @@ This provides stable 3D dragging from a 2D pointer.
 
 The Three.js playground currently supports:
 
-- rectangular deformable surface
+* rectangular deformable surface
 
-- two upper corners pinned
+* two upper corners pinned
 
-- gravity / zero-gravity testing
+* gravity / zero-gravity testing
 
-- real-time simulation
+* real-time simulation
 
-- `MeshStandardMaterial`
+* `MeshStandardMaterial`
 
-- runtime material preset selector
+* runtime material preset selector
 
-- weighted mouse grab
+* weighted mouse grab
 
-- camera orbit
+* camera orbit
 
-- zoom
+* zoom
 
-- viewing deformations from arbitrary angles
+* viewing deformations from arbitrary angles
 
-- distance vs dihedral bending experiments
+* distance vs dihedral bending experiments
 
-- lightweight per-frame performance instrumentation
+* lightweight per-frame performance instrumentation
 
-- runtime tuning controls for material, bending, solver and resolution
+* runtime tuning controls for material, bending, solver and resolution
 
-- self-collision enable / thickness / cell-size controls
+* self-collision enable / thickness / cell-size controls
 
-- copyable Performance Report output
+* copyable Performance Report output
 
-- self-collision candidate / tested / contact counters
+* self-collision candidate / tested / contact counters
 
-- temporary detector timing for hash-build vs narrow-phase profiling
+* temporary detector timing for hash-build vs narrow-phase profiling
 
 ### Current experimental quality baseline
 
 The best current visual/performance balance observed in the playground is approximately:
 
 ```ts
-segmentsX: 48;
 
-segmentsY: 36;
+segmentsX: 48
 
-acceleration: [0, 0, 0];
+segmentsY: 36
 
-iterations: 1;
+acceleration: [0, 0, 0]
 
-fixedTimeStep: 1 / 120;
+iterations: 1
 
-maxSubsteps: 4;
+fixedTimeStep: 1 / 120
 
-bendModel: "dihedral";
+maxSubsteps: 4
 
-bendStiffness: 0.3;
+bendModel: "dihedral"
 
-relaxation: 0.5;
+bendStiffness: 0.3
+
+relaxation: 0.5
+
 ```
 
 These values are a playground benchmark configuration, not finalized library defaults.
@@ -758,17 +760,29 @@ narrow phase ~59% of detector cost
 
 ```
 
-The latest optimization experiment stores each triangle's already-computed padded AABB in a reusable `Float32Array` inside `TriangleSpatialHash`.
+Each triangle's padded AABB is stored in a reusable `Float32Array` inside `TriangleSpatialHash`.
 
 An allocation-free:
 
 ```ts
-containsPoint(triangleIndex, x, y, z);
+
+containsPoint(triangleIndex, x, y, z)
+
 ```
 
-check is implemented and tested. It has not yet been connected to `SelfCollisionDetector`.
+check is integrated into `SelfCollisionDetector` before the expensive point-to-triangle distance test.
 
-The immediate next benchmark will measure how many of the current ~25k point-triangle tests can be rejected by this exact padded-AABB filter before calling `pointTriangleDistanceSquared()`.
+On the 48 x 36 REST reference scene, this reduced expensive point-triangle tests from approximately:
+
+```text
+
+25,402
+→
+3,456
+
+```
+
+and reduced representative narrow-phase cost from roughly `1.60 ms` to `~0.70 ms` while preserving `Contacts = 0`.
 
 These numbers are machine/browser/scene-specific and should be treated as development benchmarks, not universal performance guarantees.
 
@@ -777,6 +791,7 @@ Deterministic broad-phase comparison
 Manual playground comparisons were found useful for visual behavior but not precise enough for performance decisions because hand-driven deformations are not identical between runs.
 
 A deterministic benchmark methodology was therefore introduced for performance comparisons:
+
 
 same mesh geometry
 same positions buffer
@@ -787,7 +802,9 @@ warmup
 multiple measured runs
 mean / min / max / percentile comparison
 
+
 Two reference scenarios were used:
+
 
 REST
 48 x 36 flat surface
@@ -798,9 +815,11 @@ FOLDED
 controlled overlap
 expected contacts: > 0
 
+
 The experimental ParticleSpatialHash broad phase was compared against the existing triangle-based broad phase.
 
 Correctness matched exactly:
+
 
 REST
 tested = 3,456
@@ -810,41 +829,46 @@ FOLDED
 tested = 16,992
 contacts = 10,152
 
+
 Vitest benchmark results:
+
 
 REST
 
 triangle
-mean 1.7678 ms
-min 1.5082 ms
-max 3.4658 ms
+mean   1.7678 ms
+min    1.5082 ms
+max    3.4658 ms
 
 particle
-mean 2.1058 ms
-min 1.8581 ms
-max 5.8163 ms
+mean   2.1058 ms
+min    1.8581 ms
+max    5.8163 ms
 
 triangle ≈ 1.19x faster
+
 
 FOLDED
 
 triangle
-mean 2.1906 ms
-min 1.9839 ms
-max 3.3391 ms
+mean   2.1906 ms
+min    1.9839 ms
+max    3.3391 ms
 
 particle
-mean 2.3940 ms
-min 2.2558 ms
-max 3.7806 ms
+mean   2.3940 ms
+min    2.2558 ms
+max    3.7806 ms
 
 triangle ≈ 1.09x faster
+
 
 The ParticleSpatialHash experiment demonstrated that reducing hash-build insertions does not automatically improve total self-collision performance.
 
 The particle-based strategy reduced hash construction cost substantially in manual profiling, but shifted more work into triangle-AABB cell traversal and candidate lookup.
 
 Decision:
+
 
 ParticleSpatialHash
 ✓ correct
@@ -858,7 +882,109 @@ TriangleSpatialHash
 ✓ faster total FOLDED benchmark
 → retained as current broad phase
 
-The experimental particle implementation and its temporary playground integration were removed after benchmarking. The working tree returned to the last committed triangle-based implementation.
+
+The experimental particle implementation and its temporary playground integration were removed after benchmarking. The working tree returned to the retained triangle-based implementation.
+
+Flat typed-array TriangleSpatialHash optimization
+
+The retained triangle broad phase was then optimized without changing its public concept or query semantics.
+
+The old implementation used:
+
+
+Map<number, number[]>
++ per-bucket dynamic arrays
++ bucket pooling
+
+
+An experimental FlatTriangleSpatialHash replaced the hot-path storage with reusable typed arrays and a flat linked-entry hash table:
+
+
+Int32Array  bucketHeads
+Uint32Array slotGenerations
+Uint32Array entryTriangles
+Uint32Array entryKeys
+Int32Array  entryNext
+
+
+The experimental implementation was first compared against the Map implementation using the same deterministic REST and FOLDED inputs. Candidate sets matched exactly.
+
+Spatial-hash build A/B benchmark:
+
+
+REST
+Map   mean 1.1924 ms   p99 2.2304 ms
+Flat  mean 0.3542 ms   p99 0.4881 ms
+Flat ≈ 3.37x faster
+
+FOLDED
+Map   mean 1.0176 ms   p99 2.0657 ms
+Flat  mean 0.3658 ms   p99 0.4814 ms
+Flat ≈ 2.78x faster
+
+
+An end-to-end detector harness then confirmed that the improvement survived candidate queries, AABB rejection, de-duplication and point-triangle testing.
+
+Correctness remained equivalent:
+
+
+REST
+ tested = 3,456
+ contacts = 0
+ aabbRejected = 21,818
+
+FOLDED
+ tested = 16,992
+ contacts = 10,152
+ aabbRejected = 25,040
+
+
+Confirmed end-to-end benchmark after integration:
+
+
+REST
+Map   mean 1.7336 ms   p99 2.7018 ms
+Flat  mean 1.0732 ms   p99 1.3466 ms
+Flat ≈ 1.62x faster
+
+FOLDED
+Map   mean 2.1488 ms   p99 2.8409 ms
+Flat  mean 1.8534 ms   p99 2.1749 ms
+Flat ≈ 1.16x faster
+
+
+Decision:
+
+
+Flat typed-array storage
+✓ equivalent candidate sets
+✓ equivalent tested/contact results
+✓ much faster hash build
+✓ faster total REST detection
+✓ faster total FOLDED detection
+✓ lower p99 latency
+→ promoted to the official TriangleSpatialHash implementation
+
+
+The temporary FlatTriangleSpatialHash name and duplicate tests were removed. The public implementation remains TriangleSpatialHash; only its internal storage strategy changed.
+
+The permanent TriangleSpatialHash.bench.ts regression benchmark now measures the optimized production implementation directly.
+
+Final production hash-build baseline:
+
+
+REST
+mean  0.3462 ms
+p99   0.4145 ms
+max   0.4936 ms
+
+FOLDED
+mean  0.3515 ms
+p99   0.4285 ms
+max   0.5150 ms
+
+
+These values are the current deterministic broad-phase regression baseline on the development machine.
 
 Performance-testing rule
 
@@ -866,19 +992,23 @@ From this point forward, performance implementation decisions should use determi
 
 Manual playground testing remains appropriate for:
 
+
 visual quality
 interaction feel
 stability
 fold behavior
 UX
 
+
 Deterministic benchmarks should be used for:
+
 
 algorithm A vs algorithm B
 optimization before vs after
 broad-phase changes
 solver hot-loop changes
 collision-performance regressions
+
 
 A performance optimization should only be retained when:
 
@@ -934,75 +1064,75 @@ Current automated coverage includes:
 
 ### `@softsurface/core`
 
-- particle grid creation
+* particle grid creation
 
-- initial particle positions
+* initial particle positions
 
-- inverse masses
+* inverse masses
 
-- Verlet integration
+* Verlet integration
 
-- damping
+* damping
 
-- acceleration
+* acceleration
 
-- pinned particles
+* pinned particles
 
-- distance constraints
+* distance constraints
 
-- grid constraint generation
+* grid constraint generation
 
-- generic constraint solving
+* generic constraint solving
 
-- stiffness normalization behavior
+* stiffness normalization behavior
 
-- timestep-independent relaxation
+* timestep-independent relaxation
 
-- dihedral bending constraint behavior
+* dihedral bending constraint behavior
 
-- dihedral constraint generation from grid topology
+* dihedral constraint generation from grid topology
 
-- distance / dihedral bend-model selection
+* distance / dihedral bend-model selection
 
-- SoftSurface API
+* SoftSurface API
 
-- material presets
+* material presets
 
-- fixed timestep behavior
+* fixed timestep behavior
 
-- weighted grab selection
+* weighted grab selection
 
-- weighted grab movement
+* weighted grab movement
 
-- grab falloff
+* grab falloff
 
-- pinned-particle grab behavior
+* pinned-particle grab behavior
 
-- grab release
+* grab release
 
-- grid triangle topology generation
+* grid triangle topology generation
 
-- triangle spatial hashing
+* triangle spatial hashing
 
-- spatial-hash bucket reuse
+* spatial-hash bucket reuse
 
-- padded triangle AABB storage / containment
+* padded triangle AABB storage / containment
 
-- allocation-free point-triangle distance queries
+* allocation-free point-triangle distance queries
 
-- self-collision detection
+* self-collision detection
 
-- self-collision candidate de-duplication
+* self-collision candidate de-duplication
 
 ### `@softsurface/three`
 
-- direct sharing of SoftSurface position buffers
+* direct sharing of SoftSurface position buffers
 
-- expected vertex count
+* expected vertex count
 
-- indexed triangle generation
+* indexed triangle generation
 
-- UV generation
+* UV generation
 
 The latest development sequence has continued to pass the full workspace test and build commands after the dihedral integration and generic-constraint refactor.
 
@@ -1088,10 +1218,18 @@ The padded-AABB pre-filter integration was benchmarked and committed.
 
 A temporary ParticleSpatialHash experiment was then implemented only for comparison. It produced equivalent detection results but worse total benchmark performance, so the experimental implementation, tests and playground integration were removed rather than committed.
 
-Current working tree at this checkpoint:
+A permanent deterministic TriangleSpatialHash regression benchmark was added.
 
-clean
-up to date with origin/main
+The old Map-backed triangle spatial hash was then replaced internally by the benchmark-winning flat typed-array storage while preserving the public TriangleSpatialHash name and API.
+
+Relevant later commit subjects include:
+
+
+bench(core): add deterministic triangle spatial hash benchmark
+perf(core): replace triangle spatial hash with flat storage
+
+
+The temporary Map-vs-flat detector benchmark was removed after the decision. TriangleSpatialHash.bench.ts remains as the production regression benchmark.
 
 Commit hashes for later milestones should be added when needed.
 
@@ -1107,13 +1245,13 @@ Stiffness normalization made the material presets visibly more distinct.
 
 The most noticeable characteristics remain:
 
-- stretch
+* stretch
 
-- bend
+* bend
 
-- damping
+* damping
 
-- bounce / energy retention
+* bounce / energy retention
 
 The addition of dihedral bending substantially changed fold quality, so the existing preset bend values now need a new tuning pass before they should be considered representative.
 
@@ -1143,31 +1281,31 @@ The original self-intersection problem remains physically unresolved because Sof
 
 The detection infrastructure now includes:
 
-- stable grid triangle indices via `GridTopology`
+* stable grid triangle indices via `GridTopology`
 
-- broad-phase triangle spatial hashing via `TriangleSpatialHash`
+* broad-phase triangle spatial hashing via the flat typed-array `TriangleSpatialHash` implementation
 
-- pooled / reused spatial-hash buckets to reduce GC pressure
+* flat typed-array triangle spatial hash with reusable bucket heads / entry buffers / generation stamps to reduce Map, dynamic-array and GC overhead
 
-- allocation-free point-to-triangle distance / closest-point testing
+* allocation-free point-to-triangle distance / closest-point testing
 
-- reusable `PointTriangleResult`
+* reusable `PointTriangleResult`
 
-- candidate de-duplication using a reusable `Uint32Array` visit-stamp buffer
+* candidate de-duplication using a reusable `Uint32Array` visit-stamp buffer
 
-- reusable `SelfCollisionStats`
+* reusable `SelfCollisionStats`
 
-- optional detector integration in `SoftSurface`
+* optional detector integration in `SoftSurface`
 
-- playground controls for enable / thickness / cell size
+* playground controls for enable / thickness / cell size
 
-- Performance HUD counters for candidates / tested pairs / contacts
+* Performance HUD counters for candidates / tested pairs / contacts
 
-- copyable benchmark reports
+* copyable benchmark reports
 
-- temporary timing instrumentation for hash build / narrow phase / total detector time
+* temporary timing instrumentation for hash build / narrow phase / total detector time
 
-- cached padded triangle AABBs and an allocation-free `containsPoint()` test
+* cached padded triangle AABBs and an allocation-free `containsPoint()` test
 
 Current detection ordering:
 
@@ -1201,21 +1339,26 @@ with `thickness: 0.03`, which is an important correctness signal: the flat surfa
 
 During strong folding / penetration, hundreds of contacts can be detected, showing that the detector is observing the geometric overlap problem.
 
-The current performance problem is more important than collision response: on the 48 x 36 reference mesh, detector cost is approximately `2.70 ms` before any positional response is added.
+Detection performance has been reduced substantially before collision response is added. The optimized deterministic detector harness measures approximately `1.07 ms` in REST and `1.85 ms` in the deterministic FOLDED case on the current development machine. Collision response will add new cost, so these values should be treated as the pre-response baseline rather than a final budget.
 
 The exact padded-AABB pre-filter is now integrated into SelfCollisionDetector.
 
 On the 48 x 36 reference resting scene, the pre-filter reduced expensive point-triangle tests from approximately:
 
+
 25,402
 →
 3,456
 
+
 while keeping:
+
 
 Contacts = 0
 
+
 Representative detector timing improved from approximately:
+
 
 Narrow phase
 1.60 ms
@@ -1227,25 +1370,36 @@ Detector total
 →
 ~2.00 ms
 
-The broad phase is now the dominant remaining cost.
 
-A particle-based inverted broad-phase experiment was implemented and benchmarked deterministically, but the existing triangle-based broad phase remained faster overall and is therefore retained.
+The AABB pre-filter made the broad phase the next dominant target. A particle-based inverted broad phase was rejected by deterministic benchmarking, while a flat typed-array rewrite of the retained triangle spatial hash produced a large and repeatable improvement and is now the production implementation.
+
+Current production hash-build baseline:
+
+
+REST    mean ~0.346 ms
+FOLDED  mean ~0.352 ms
+
+
+Current pre-response detector baseline from the deterministic A/B harness:
+
+
+REST    mean ~1.073 ms
+FOLDED  mean ~1.853 ms
+
 
 Still required before self-collision can be considered physically implemented:
 
-- further optimize TriangleSpatialHash total broad-phase cost where justified by deterministic benchmarks
+* establish a permanent production SelfCollisionDetector regression benchmark using the real detector directly
 
-- add topology-aware exclusions if materially useful
+* add topology-aware exclusions if materially useful
 
-- implement vertex-triangle positional collision response
+* implement vertex-triangle positional collision response
 
-- vertex-triangle positional collision response
+* revisit solver / grab / collision ordering after response exists
 
-- revisit solver / grab / collision ordering
+* later evaluate edge-edge collision cases
 
-- later evaluate edge-edge collision cases
-
-- investigate tunneling / fast dragging and possible CCD or movement limiting
+* investigate tunneling / fast dragging and possible CCD or movement limiting
 
 ### Dihedral stability
 
@@ -1259,15 +1413,15 @@ The visual gap has narrowed substantially after adding dihedral bending and rela
 
 The main remaining physical gaps now include:
 
-- self-collision
+* self-collision
 
-- further material tuning
+* further material tuning
 
-- improved collision behavior
+* improved collision behavior
 
-- stability under extreme parameters
+* stability under extreme parameters
 
-- future wrinkle/detail refinements
+* future wrinkle/detail refinements
 
 Lighting/material presentation can still be improved later, but current development should continue to prioritize physical shape, motion and robustness.
 
@@ -1275,45 +1429,78 @@ Lighting/material presentation can still be improved later, but current developm
 
 ## Next milestone
 
-### Optimize the retained triangle broad phase
+### Freeze production detector baseline, then implement vertex-triangle collision response
 
-The padded-AABB pre-filter is integrated and has already reduced narrow-phase work substantially.
+The triangle broad-phase optimization phase is now complete enough to move forward.
 
-A deterministic A/B benchmark was used to compare the current TriangleSpatialHash against an experimental ParticleSpatialHash.
+The retained TriangleSpatialHash has been rewritten internally with flat typed-array storage and promoted after deterministic correctness + performance gates.
 
-Result:
+Current permanent broad-phase benchmark:
+
+
+TriangleSpatialHash.bench.ts
 
 REST
-triangle ≈ 1.19x faster
+mean 0.3462 ms
+p99  0.4145 ms
 
 FOLDED
-triangle ≈ 1.09x faster
+mean 0.3515 ms
+p99  0.4285 ms
 
-The particle broad phase was therefore rejected and removed.
 
-The current optimization target remains the triangle-based broad phase, but future changes must be validated using deterministic benchmarks rather than hand-driven playground runs.
+The temporary end-to-end A/B harness also established the current detector reference:
 
-Current reference behavior:
 
 REST
-tested pairs: 3,456
-contacts: 0
+ tested: 3,456
+ contacts: 0
+ mean: ~1.073 ms
 
-FOLDED deterministic benchmark
-tested pairs: 16,992
-contacts: 10,152
+FOLDED
+ tested: 16,992
+ contacts: 10,152
+ mean: ~1.853 ms
 
-Immediate direction:
 
-establish a reusable deterministic benchmark for the retained TriangleSpatialHash;
+The next development session should restart here:
 
-profile and optimize only one broad-phase change at a time;
 
-require identical contact/test correctness before comparing timings;
+1. Confirm `git status --short` is clean except for the intended PROJECT_STATE.md update.
 
-keep an optimization only if mean and tail performance improve meaningfully;
+2. Create:
+   packages/core/bench/SelfCollisionDetector.bench.ts
 
-after broad-phase cost is acceptable, implement vertex-triangle collision response.
+3. Benchmark the real production `SelfCollisionDetector` directly — no Map-vs-flat switch and no temporary comparison harness.
+
+4. Reuse the deterministic REST and FOLDED scenarios:
+   - 48 x 36 surface
+   - thickness 0.03
+   - cellSize 0.10
+   - REST expected contacts = 0
+   - FOLDED expected tested = 16,992 and contacts = 10,152 if detector behavior is unchanged
+
+5. Record mean / min / max / p99 after warmup and keep this file as the permanent end-to-end collision-detection regression benchmark.
+
+6. Run `pnpm test` and `pnpm build`, then commit the benchmark separately.
+
+7. Start vertex-triangle positional collision response.
+
+
+Collision-response implementation should continue to follow the established performance rule: one meaningful change at a time, correctness before timing, deterministic benchmarks for performance decisions, and manual playground testing for visual behavior/stability.
+
+The likely response-stage questions are:
+
+
+how to distribute positional correction using particle inverse masses / barycentric weights
+how much correction to apply per substep
+how to preserve Verlet velocity when positions are corrected
+whether topology-near triangles need exclusions before response
+where collision response belongs relative to constraints, relaxation and grab
+how to prevent oscillation / sticking during persistent contact
+
+
+Do not resume broad-phase experimentation unless the permanent detector benchmark or collision-response work exposes a new measured bottleneck.
 
 Performance remains a continuous design constraint rather than an end-stage optimization task.
 
@@ -1391,6 +1578,16 @@ Performance remains a continuous design constraint rather than an end-stage opti
 
 [x] Retain TriangleSpatialHash after deterministic comparison
 
+[x] Deterministic TriangleSpatialHash regression benchmark
+
+[x] Map vs flat typed-array TriangleSpatialHash comparison
+
+[x] Replace Map-backed TriangleSpatialHash with flat typed-array storage
+
+[x] Integrate optimized TriangleSpatialHash into SelfCollisionDetector
+
+[ ] Permanent SelfCollisionDetector regression benchmark
+
 [ ] Self-collision topology exclusions
 
 [ ] Vertex-triangle self-collision response
@@ -1466,6 +1663,10 @@ Renderer-specific behavior belongs in adapters such as:
 Three.js may determine **where** an interaction occurs, but the physics engine must determine **how the surface reacts**.
 
 This separation is considered a fundamental architectural constraint of SoftSurface.
+
+
+
+
 
 # Long-term direction — General deformable geometry
 
@@ -1567,23 +1768,23 @@ This is considered a **possible expansion path**, not a requirement for the curr
 
 This direction could enable:
 
-- interactive 3D product presentation
+* interactive 3D product presentation
 
-- material previews
+* material previews
 
-- footwear and sole deformation
+* footwear and sole deformation
 
-- cushions, mattresses and foam products
+* cushions, mattresses and foam products
 
-- rubber and silicone objects
+* rubber and silicone objects
 
-- flexible packaging
+* flexible packaging
 
-- interactive GLTF models
+* interactive GLTF models
 
-- creative 3D experiences
+* creative 3D experiences
 
-- game objects and environmental soft bodies
+* game objects and environmental soft bodies
 
 ## Product positioning
 
@@ -1607,16 +1808,16 @@ general soft-body / engineering simulation
 
 The emphasis should remain on:
 
-- browser-first usage
+* browser-first usage
 
-- simple APIs
+* simple APIs
 
-- renderer independence
+* renderer independence
 
-- real-time interaction
+* real-time interaction
 
-- visually plausible material behavior
+* visually plausible material behavior
 
-- creative-web and product-experience use cases
+* creative-web and product-experience use cases
 
 Architectural decisions made during the current MVP should avoid unnecessarily preventing this future evolution.
