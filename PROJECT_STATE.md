@@ -1,8 +1,86 @@
+Pasted markdown.md
+File
+direi di fare un commit e magari aggiornare:
+Pasted code.ts
+TypeScript
+puoi darmi la versione di main.ts del playground aggiornata? :
+
+Hai ragione. Fermiamoci qui e committiamo prima di collegare il filtro AABB al detector. Lo stato attuale è verde ed è un ottimo checkpoint.
+
+Io lo dividerei in 3 commit logici, così la history rimane leggibile.
+
+Primo: integrazione della detection in SoftSurface e statistiche:
+
+git add \
+ packages/core/src/SoftSurface.ts \
+ packages/core/src/SelfCollisionDetector.ts \
+ packages/core/src/index.ts
+
+git commit -m "feat(core): integrate self-collision detection"
+
+Secondo: controlli e benchmark nel playground:
+
+git add \
+ apps/playground/src/main.ts \
+ apps/playground/src/style.css
+
+git commit -m "feat(playground): add self-collision benchmarking controls"
+
+Terzo: infrastruttura AABB appena aggiunta e testata:
+
+git add \
+ packages/core/src/TriangleSpatialHash.ts \
+ packages/core/test/TriangleSpatialHash.test.ts
+
+git commit -m "perf(core): cache padded triangle bounds"
+
+Poi:
+
+git push
+
+Prima dei commit, visto che hai già verificato che è tutto verde, farei comunque un ultimo:
+
+pnpm test
+pnpm build
+Nota sul profiler
+
+In questo momento abbiamo anche:
+
+hashBuildMs
+narrowPhaseMs
+totalMs
+
+dentro SelfCollisionStats.
+
+Avevamo inizialmente pensato di considerarli temporanei, ma per ora li terrei: il playground è esplicitamente il nostro ambiente di profiling e ci stanno dando dati molto utili. Quando avremo stabilizzato la self-collision potremo decidere se rimuoverli dall'API pubblica o spostarli dietro una modalità debug.
+
+Dopo questi tre commit, il working tree dovrebbe essere pulito. Solo allora facciamo il prossimo cambiamento: usare containsPoint() in SelfCollisionDetector e misurare quanti dei 25.402 narrow-phase test riusciamo a eliminare.
+
+Pasted markdown(1).md
+File
+dobbiamo aggiornare project state :
+ok
+
+Aggiornato. Ho mantenuto la struttura del PROJECT_STATE.md originale e ho incorporato tutto lo stato raggiunto oggi.
+
+In particolare ora include: self-collision detection e relativa architettura, GridTopology, TriangleSpatialHash, PointTriangleDistance, pooling dei bucket, deduplicazione dei candidati, integrazione in SoftSurface, controlli/HUD del playground, benchmark OFF/ON, profiling hash build / narrow phase, risultati dei test cellSize, cache AABB + containsPoint(), suite aggiornata a circa 70 test, e il nuovo prossimo milestone: AABB pre-filter prima della collision response. Ho anche distinto esplicitamente ciò che è già committato da ciò che è implementato/testato ma non ancora confermato come commit.
+
+Scarica PROJECT_STATE aggiornato
+
+Dopo averlo sostituito nella root della repo, questo può diventare il prossimo commit documentale.
+
+PROJECT_STATE_2026-08-21.md
+Documento
+
+Libreria
+/
+PROJECT_STATE_2026-08-21.md
+
 # SoftSurface — Project State
 
-**Last updated:** 2026-08-20
+**Last updated:** 2026-08-21
 
-**Status:** Active development — interactive physics MVP; dihedral bending and performance baseline established
+**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection and performance optimization in progress
 
 ## Goal
 
@@ -10,19 +88,19 @@ SoftSurface is a lightweight, renderer-agnostic engine for real-time deformable 
 
 The goal is to support materials and behaviors such as:
 
-* cloth
+- cloth
 
-* silk
+- silk
 
-* paper
+- paper
 
-* rubber
+- rubber
 
-* gel
+- gel
 
-* membranes
+- membranes
 
-* interactive deformable surfaces
+- interactive deformable surfaces
 
 The physics engine must remain independent from rendering libraries such as Three.js.
 
@@ -36,21 +114,21 @@ SoftSurface/
 
 ├── packages/
 
-│   ├── core/
+│   ├── core/
 
-│   │   └── @softsurface/core
+│   │   └── @softsurface/core
 
-│   │
+│   │
 
-│   └── three/
+│   └── three/
 
-│       └── @softsurface/three
+│       └── @softsurface/three
 
 │
 
 └── apps/
 
-    └── playground/
+    └── playground/
 
 ```
 
@@ -60,33 +138,41 @@ Renderer-independent physics engine.
 
 Currently contains:
 
-* `ParticleGrid`
+- `ParticleGrid`
 
-* `VerletIntegrator`
+- `VerletIntegrator`
 
-* generic `Constraint` interface
+- generic `Constraint` interface
 
-* `DistanceConstraint`
+- `DistanceConstraint`
 
-* `DihedralBendingConstraint`
+- `DihedralBendingConstraint`
 
-* `ConstraintBuilder`
+- `ConstraintBuilder`
 
-* `DihedralConstraintBuilder`
+- `DihedralConstraintBuilder`
 
-* `ConstraintSolver`
+- `ConstraintSolver`
 
-* `SurfaceRelaxation`
+- `SurfaceRelaxation`
 
-* `SoftSurface`
+- `SoftSurface`
 
-* `GrabInteraction`
+- `GrabInteraction`
 
-* material presets
+- `GridTopology`
 
-* fixed timestep simulation
+- `TriangleSpatialHash`
 
-* weighted grab interaction
+- `PointTriangleDistance`
+
+- `SelfCollisionDetector`
+
+- material presets
+
+- fixed timestep simulation
+
+- weighted grab interaction
 
 The core has **no dependency on Three.js, React or the DOM**.
 
@@ -96,9 +182,9 @@ Three.js adapter.
 
 Currently contains:
 
-* `SoftSurfaceGeometry`
+- `SoftSurfaceGeometry`
 
-* `SoftSurfacePointerInteraction`
+- `SoftSurfacePointerInteraction`
 
 `SoftSurfaceGeometry` exposes the simulation's `Float32Array` directly as a Three.js `BufferAttribute`, avoiding a position-array copy on every frame.
 
@@ -108,23 +194,23 @@ Currently contains:
 
 pointer
 
-   ↓
+   ↓
 
 Three.js Raycaster
 
-   ↓
+   ↓
 
 mesh intersection
 
-   ↓
+   ↓
 
 world-space point
 
-   ↓
+   ↓
 
 mesh local-space conversion
 
-   ↓
+   ↓
 
 SoftSurface grab API
 
@@ -132,15 +218,15 @@ SoftSurface grab API
 
 The physics core therefore remains unaware of:
 
-* pointers
+- pointers
 
-* DOM events
+- DOM events
 
-* cameras
+- cameras
 
-* raycasting
+- raycasting
 
-* Three.js meshes
+- Three.js meshes
 
 ### `apps/playground`
 
@@ -148,15 +234,15 @@ Vite + Three.js development environment.
 
 It is used only for:
 
-* visual testing
+- visual testing
 
-* material tuning
+- material tuning
 
-* interaction experiments
+- interaction experiments
 
-* performance testing
+- performance testing
 
-* examples
+- examples
 
 It is not part of the published library.
 
@@ -170,11 +256,11 @@ Current simulation model:
 
 Particle grid
 
-    ↓
+    ↓
 
 Verlet integration
 
-    ↓
+    ↓
 
 Structural constraints
 
@@ -182,19 +268,23 @@ Shear constraints
 
 Bend constraints
 
-    ↓
+    ↓
 
 Generic iterative constraint solver
 
-    ↓
+    ↓
 
 Surface relaxation
 
-    ↓
+    ↓
 
 Weighted grab interaction
 
-    ↓
+    ↓
+
+Self-collision detection (optional, detection-only)
+
+    ↓
 
 Updated Float32Array positions
 
@@ -390,47 +480,47 @@ This allows it to resist stretching while still forming folds.
 
 **Cloth**
 
-* low stretch
+- low stretch
 
-* medium bend resistance
+- medium bend resistance
 
-* moderate movement
+- moderate movement
 
 **Silk**
 
-* low stretch
+- low stretch
 
-* very low bend resistance
+- very low bend resistance
 
-* easy folding
+- easy folding
 
-* light response
+- light response
 
 **Paper**
 
-* almost no stretch
+- almost no stretch
 
-* high bend resistance
+- high bend resistance
 
-* tends to retain flatter shapes
+- tends to retain flatter shapes
 
 **Rubber**
 
-* more stretch
+- more stretch
 
-* medium bend resistance
+- medium bend resistance
 
-* stronger elastic response
+- stronger elastic response
 
 **Gel**
 
-* moderate stretch
+- moderate stretch
 
-* low bend resistance
+- low bend resistance
 
-* high damping
+- high damping
 
-* slower / softer response
+- slower / softer response
 
 Preset values are still experimental and will continue to be tuned visually.
 
@@ -462,21 +552,21 @@ Conceptually:
 
 ```text
 
-             grab center
+             grab center
 
-                  ↓
+                  ↓
 
-             strongest
+             strongest
 
-                ███
+                ███
 
-             ███████
+             ███████
 
-          ░░█████████░░
+          ░░█████████░░
 
-        ░░░░█████████░░░░
+        ░░░░█████████░░░░
 
-             weaker
+             weaker
 
 ```
 
@@ -502,19 +592,19 @@ Pinned particles are ignored by the grab interaction.
 
 pointerdown
 
-    ↓
+    ↓
 
 raycast against SoftSurface mesh
 
-    ↓
+    ↓
 
 intersection point in world space
 
-    ↓
+    ↓
 
 convert to mesh local space
 
-    ↓
+    ↓
 
 surface.grab(...)
 
@@ -528,23 +618,23 @@ Future pointer rays intersect this plane:
 
 pointer move
 
-    ↓
+    ↓
 
 camera ray
 
-    ↓
+    ↓
 
 drag plane
 
-    ↓
+    ↓
 
 world-space target
 
-    ↓
+    ↓
 
 local-space target
 
-    ↓
+    ↓
 
 surface.moveGrab(...)
 
@@ -558,51 +648,62 @@ This provides stable 3D dragging from a 2D pointer.
 
 The Three.js playground currently supports:
 
-* rectangular deformable surface
+- rectangular deformable surface
 
-* two upper corners pinned
+- two upper corners pinned
 
-* gravity / zero-gravity testing
+- gravity / zero-gravity testing
 
-* real-time simulation
+- real-time simulation
 
-* `MeshStandardMaterial`
+- `MeshStandardMaterial`
 
-* runtime material preset selector
+- runtime material preset selector
 
-* weighted mouse grab
+- weighted mouse grab
 
-* camera orbit
+- camera orbit
 
-* zoom
+- zoom
 
-* viewing deformations from arbitrary angles
+- viewing deformations from arbitrary angles
 
-* distance vs dihedral bending experiments
+- distance vs dihedral bending experiments
 
-* lightweight per-frame performance instrumentation
+- lightweight per-frame performance instrumentation
+
+- runtime tuning controls for material, bending, solver and resolution
+
+- self-collision enable / thickness / cell-size controls
+
+- copyable Performance Report output
+
+- self-collision candidate / tested / contact counters
+
+- temporary detector timing for hash-build vs narrow-phase profiling
 
 ### Current experimental quality baseline
 
 The best current visual/performance balance observed in the playground is approximately:
 
 ```ts
+segmentsX: 48;
 
-segmentsX: 48
-segmentsY: 36
+segmentsY: 36;
 
-acceleration: [0, 0, 0]
+acceleration: [0, 0, 0];
 
-iterations: 1
+iterations: 1;
 
-fixedTimeStep: 1 / 120
-maxSubsteps: 4
+fixedTimeStep: 1 / 120;
 
-bendModel: "dihedral"
-bendStiffness: 0.3
+maxSubsteps: 4;
 
-relaxation: 0.5
+bendModel: "dihedral";
 
+bendStiffness: 0.3;
+
+relaxation: 0.5;
 ```
 
 These values are a playground benchmark configuration, not finalized library defaults.
@@ -613,38 +714,139 @@ Profiling separates:
 
 ```text
 
-surface.step()      -> physics
+surface.step() -> physics
 
-geometry.update()   -> geometry / normals
+geometry.update() -> geometry / normals
 
-renderer.render()   -> render submission
+renderer.render() -> render submission
 
 ```
 
-On the current development machine and scene, representative measurements were:
+On the current development machine and scene, representative pre-self-collision measurements were:
 
 ```text
 
-dihedral / 10 iterations   ~5.97 ms physics avg
+dihedral / 10 iterations ~5.97 ms physics avg
 
-dihedral / 6 iterations    ~3.62 ms physics avg
+dihedral / 6 iterations ~3.62 ms physics avg
 
-dihedral / 4 iterations    ~2.62 ms physics avg
+dihedral / 4 iterations ~2.62 ms physics avg
 
-dihedral / 2 iterations    ~1.63 ms physics avg
+dihedral / 2 iterations ~1.63 ms physics avg
 
-dihedral / 1 iteration     ~0.98 ms physics avg
+dihedral / 1 iteration ~0.98 ms physics avg
 
 dihedral / 1 iteration,
-relaxation 0.5             ~0.82 ms physics avg
+relaxation 0.5 ~0.82 ms physics avg
 
-distance / 10 iterations   ~1.86 ms physics avg
+distance / 10 iterations ~1.86 ms physics avg
 
 ```
 
 The distance model was cheaper at the same iteration count, but its visual fold quality was substantially worse.
 
 Reducing dihedral solver iterations from 10 to 1 produced no obvious visual degradation in the current playground test while reducing physics CPU time dramatically.
+
+### Self-collision detection benchmark
+
+Self-collision is currently detection-only. No collision response or positional correction has been implemented yet.
+
+Current reference configuration:
+
+```text
+
+preset: cloth
+resolution: 48 x 36
+gravityY: 0
+iterations: 1
+fixedTimeStep: 1 / 120
+maxSubsteps: 4
+relaxation: 0.5
+bendModel: dihedral
+bendStiffness: 0.3
+selfCollisionThickness: 0.03
+
+```
+
+A recent reference run with self-collision disabled produced:
+
+```text
+
+Physics avg ~0.87 ms
+Physics max ~1.60 ms
+
+```
+
+With self-collision detection enabled and:
+
+```text
+
+cellSize: 0.10
+thickness: 0.03
+
+```
+
+the same scene produced approximately:
+
+```text
+
+Physics avg ~3.21 ms
+Physics max ~3.70 ms
+
+Hash build ~1.10 ms
+Narrow phase ~1.60 ms
+Detector total ~2.70 ms
+
+Candidates ~35,782
+Tested ~25,402
+Contacts 0
+
+```
+
+The first self-collision performance gate therefore does not pass yet. Detection alone currently adds several milliseconds of CPU work even when the resting surface has no actual contacts.
+
+Cell-size experiments showed the expected tradeoff between candidate count and hash-construction cost:
+
+```text
+
+cellSize 0.17 -> ~4.01 ms physics, ~68,688 candidates, ~58,320 tested
+cellSize 0.12 -> ~3.17 ms physics, ~44,875 candidates, ~34,507 tested
+cellSize 0.10 -> ~3.16-3.26 ms physics, ~35,770 candidates, ~25,390 tested
+cellSize 0.08 -> ~4.15 ms physics, ~31,888 candidates, ~21,516 tested
+cellSize 0.06 -> ~4.15 ms physics, ~25,207 candidates, ~14,835 tested
+
+```
+
+The current practical sweet spot is around:
+
+```text
+
+cellSize: 0.10 - 0.12
+
+```
+
+Smaller cells reduce the number of narrow-phase tests but increase spatial-hash construction work enough to make the total slower.
+
+The current profile indicates that both stages matter:
+
+```text
+
+hash build ~41% of detector cost
+narrow phase ~59% of detector cost
+
+```
+
+The latest optimization experiment stores each triangle's already-computed padded AABB in a reusable `Float32Array` inside `TriangleSpatialHash`.
+
+An allocation-free:
+
+```ts
+containsPoint(triangleIndex, x, y, z);
+```
+
+check is implemented and tested. It has not yet been connected to `SelfCollisionDetector`.
+
+The immediate next benchmark will measure how many of the current ~25k point-triangle tests can be rejected by this exact padded-AABB filter before calling `pointTriangleDistanceSquared()`.
 
 These numbers are machine/browser/scene-specific and should be treated as development benchmarks, not universal performance guarantees.
 
@@ -656,19 +858,19 @@ The playground distinguishes interaction based on where the primary pointer star
 
 LEFT DRAG on SoftSurface
 
-        ↓
+        ↓
 
 deform material
 
 LEFT DRAG on empty space
 
-        ↓
+        ↓
 
 orbit camera
 
 MOUSE WHEEL
 
-        ↓
+        ↓
 
 zoom
 
@@ -690,61 +892,75 @@ Current automated coverage includes:
 
 ### `@softsurface/core`
 
-* particle grid creation
+- particle grid creation
 
-* initial particle positions
+- initial particle positions
 
-* inverse masses
+- inverse masses
 
-* Verlet integration
+- Verlet integration
 
-* damping
+- damping
 
-* acceleration
+- acceleration
 
-* pinned particles
+- pinned particles
 
-* distance constraints
+- distance constraints
 
-* grid constraint generation
+- grid constraint generation
 
-* generic constraint solving
+- generic constraint solving
 
-* stiffness normalization behavior
+- stiffness normalization behavior
 
-* timestep-independent relaxation
+- timestep-independent relaxation
 
-* dihedral bending constraint behavior
+- dihedral bending constraint behavior
 
-* dihedral constraint generation from grid topology
+- dihedral constraint generation from grid topology
 
-* distance / dihedral bend-model selection
+- distance / dihedral bend-model selection
 
-* SoftSurface API
+- SoftSurface API
 
-* material presets
+- material presets
 
-* fixed timestep behavior
+- fixed timestep behavior
 
-* weighted grab selection
+- weighted grab selection
 
-* weighted grab movement
+- weighted grab movement
 
-* grab falloff
+- grab falloff
 
-* pinned-particle grab behavior
+- pinned-particle grab behavior
 
-* grab release
+- grab release
+
+- grid triangle topology generation
+
+- triangle spatial hashing
+
+- spatial-hash bucket reuse
+
+- padded triangle AABB storage / containment
+
+- allocation-free point-triangle distance queries
+
+- self-collision detection
+
+- self-collision candidate de-duplication
 
 ### `@softsurface/three`
 
-* direct sharing of SoftSurface position buffers
+- direct sharing of SoftSurface position buffers
 
-* expected vertex count
+- expected vertex count
 
-* indexed triangle generation
+- indexed triangle generation
 
-* UV generation
+- UV generation
 
 The latest development sequence has continued to pass the full workspace test and build commands after the dihedral integration and generic-constraint refactor.
 
@@ -754,7 +970,7 @@ The suite is currently approximately:
 
 @softsurface/core
 
-50 tests passing
+66 tests passing
 
 @softsurface/three
 
@@ -762,7 +978,7 @@ The suite is currently approximately:
 
 Total
 
-54 tests passing
+70 tests passing
 
 ```
 
@@ -812,9 +1028,35 @@ feat(core): support dihedral bending model
 
 perf(core): cache per-iteration constraint stiffness
 
+perf(three): avoid per-frame bounding sphere updates
+
+docs: update project state after dihedral performance tuning
+
+docs: add project readme and MIT license
+
+feat(playground): add tuning controls and performance HUD
+
+feat(core): add self-collision geometry infrastructure
+
+feat(core): add self-collision detection
+
 ```
 
-Commit hashes for these later milestones should be added when needed.
+The following self-collision integration / benchmark work is implemented and passing locally but was not yet confirmed committed at this checkpoint:
+
+```text
+
+SoftSurface self-collision detector integration
+playground self-collision benchmark controls
+copyable benchmark report
+internal hash-build / narrow-phase timing
+padded triangle AABB cache + containsPoint()
+
+```
+
+Commit hashes for later milestones should be added when needed.
+
+---
 
 ---
 
@@ -826,13 +1068,13 @@ Stiffness normalization made the material presets visibly more distinct.
 
 The most noticeable characteristics remain:
 
-* stretch
+- stretch
 
-* bend
+- bend
 
-* damping
+- damping
 
-* bounce / energy retention
+- bounce / energy retention
 
 The addition of dihedral bending substantially changed fold quality, so the existing preset bend values now need a new tuning pass before they should be considered representative.
 
@@ -847,6 +1089,7 @@ Switching to dihedral bending produced a major visual improvement. With approxim
 ```text
 
 bendStiffness: 0.3
+
 relaxation: 0.5
 
 ```
@@ -855,27 +1098,91 @@ and the current 48 x 36 test surface, the grid artifacts are close to disappeari
 
 The quality remains strong even with a single solver iteration in the current playground scenario.
 
-### Known self-intersection problem
+### Self-collision status
 
-SoftSurface does not currently implement self-collision.
+The original self-intersection problem remains physically unresolved because SoftSurface still has no self-collision response.
 
-A folded section of the surface can therefore pass through another section of the same surface. After penetration, stretch/shear/bending constraints may keep the mesh in the penetrated configuration, which can visually look as if two layers have become stuck together.
+The detection infrastructure now includes:
 
-This is not expected to be solved by bend stiffness or relaxation tuning.
+- stable grid triangle indices via `GridTopology`
 
-Future self-collision work will likely require:
+- broad-phase triangle spatial hashing via `TriangleSpatialHash`
 
-* collision thickness
+- pooled / reused spatial-hash buckets to reduce GC pressure
 
-* broad-phase acceleration such as spatial hashing
+- allocation-free point-to-triangle distance / closest-point testing
 
-* vertex-triangle collision handling
+- reusable `PointTriangleResult`
 
-* exclusion of topologically adjacent triangles
+- candidate de-duplication using a reusable `Uint32Array` visit-stamp buffer
 
-* later evaluation of edge-edge collision cases
+- reusable `SelfCollisionStats`
 
-* careful interaction with grab ordering and tunneling
+- optional detector integration in `SoftSurface`
+
+- playground controls for enable / thickness / cell size
+
+- Performance HUD counters for candidates / tested pairs / contacts
+
+- copyable benchmark reports
+
+- temporary timing instrumentation for hash build / narrow phase / total detector time
+
+- cached padded triangle AABBs and an allocation-free `containsPoint()` test
+
+Current detection ordering:
+
+```text
+
+Verlet integration
+↓
+constraint solver
+↓
+surface relaxation
+↓
+grab interaction
+↓
+self-collision detection
+↓
+statistics only
+
+```
+
+No vertices are currently moved by self-collision.
+
+At rest, the reference surface reports:
+
+```text
+
+Contacts = 0
+
+```
+
+with `thickness: 0.03`, which is an important correctness signal: the flat surface is not being interpreted as self-colliding.
+
+During strong folding / penetration, hundreds of contacts can be detected, showing that the detector is observing the geometric overlap problem.
+
+The current performance problem is more important than collision response: on the 48 x 36 reference mesh, detector cost is approximately `2.70 ms` before any positional response is added.
+
+The next optimization is therefore an exact padded-AABB pre-filter before point-triangle distance testing.
+
+Still required before self-collision can be considered physically implemented:
+
+- connect padded-AABB rejection to `SelfCollisionDetector`
+
+- benchmark rejection rate and narrow-phase cost
+
+- further optimize `TriangleSpatialHash.build()` if it remains near ~1 ms
+
+- add topology-aware exclusions if materially useful
+
+- vertex-triangle positional collision response
+
+- revisit solver / grab / collision ordering
+
+- later evaluate edge-edge collision cases
+
+- investigate tunneling / fast dragging and possible CCD or movement limiting
 
 ### Dihedral stability
 
@@ -889,15 +1196,15 @@ The visual gap has narrowed substantially after adding dihedral bending and rela
 
 The main remaining physical gaps now include:
 
-* self-collision
+- self-collision
 
-* further material tuning
+- further material tuning
 
-* improved collision behavior
+- improved collision behavior
 
-* stability under extreme parameters
+- stability under extreme parameters
 
-* future wrinkle/detail refinements
+- future wrinkle/detail refinements
 
 Lighting/material presentation can still be improved later, but current development should continue to prioritize physical shape, motion and robustness.
 
@@ -905,51 +1212,62 @@ Lighting/material presentation can still be improved later, but current developm
 
 ## Next milestone
 
-### Playground tuning controls and performance HUD
+### Optimize self-collision detection before response
 
-The immediate next workflow improvement is to stop hardcoding tuning values in `apps/playground/src/main.ts`.
+The playground tuning controls and Performance HUD are complete.
 
-The playground should expose interactive controls for parameters such as:
+The immediate milestone is to reduce self-collision detection cost before introducing any collision response.
 
-```text
-
-preset
-
-bendModel
-
-bendStiffness
-
-relaxation
-
-iterations
-
-gravity
-
-segmentsX / segmentsY
-
-fixedTimeStep
-
-maxSubsteps
-
-```
-
-A small performance HUD should expose the existing measurements for:
+Current reference detector profile:
 
 ```text
 
-physics avg / max
+Hash build ~1.10 ms
+Narrow phase ~1.60 ms
+Total ~2.70 ms
 
-geometry avg / max
-
-render avg / max
-
-FPS
+Candidates ~35,782
+Tested ~25,402
+Contacts 0
 
 ```
 
-The first version can rebuild the surface when a setting changes. A later API can distinguish parameters that are safe to modify live from parameters that require topology/surface reconstruction.
+The next concrete experiment is:
 
-After the tuning UI is in place, the next major physics feature should be self-collision.
+```text
+
+spatial-hash candidate
+↓
+exact padded AABB test
+↓
+reject if outside
+↓
+pointTriangleDistanceSquared()
+↓
+contact candidate
+
+```
+
+The padded AABB cache and `containsPoint()` primitive are already implemented and tested. The next code change is to connect that pre-filter to `SelfCollisionDetector`.
+
+Success criteria:
+
+- significantly reduce `testedPairs` from the current ~25k resting-scene value
+
+- reduce narrow-phase time from ~1.60 ms
+
+- avoid meaningful new allocation or GC pressure
+
+- re-run the exact same 48 x 36 benchmark with `cellSize: 0.10`
+
+After that:
+
+optimize spatial-hash build if it remains near ~1 ms;
+add topology-aware exclusions where they materially reduce work or false/local contacts;
+only then implement vertex-triangle collision response;
+benchmark self-collision OFF vs ON after every milestone.
+
+Performance remains a continuous design constraint rather than an end-stage optimization task.
 
 ---
 
@@ -1007,13 +1325,21 @@ After the tuning UI is in place, the next major physics feature should be self-c
 
 [x] Solver-iteration performance tuning
 
-[ ] Playground tuning controls
+[x] Playground tuning controls
 
-[ ] Performance HUD
+[x] Performance HUD
 
-[ ] Self-collision broad phase
+[x] Self-collision broad phase
 
-[ ] Vertex-triangle self-collision
+[x] Vertex-triangle self-collision detection
+
+[x] Padded triangle AABB cache / containsPoint primitive
+
+[ ] Self-collision exact AABB pre-filter integration
+
+[ ] Self-collision topology exclusions
+
+[ ] Vertex-triangle self-collision response
 
 [ ] Dihedral extreme-stiffness stability
 
@@ -1087,8 +1413,6 @@ Three.js may determine **where** an interaction occurs, but the physics engine m
 
 This separation is considered a fundamental architectural constraint of SoftSurface.
 
-
-
 # Long-term direction — General deformable geometry
 
 SoftSurface should not be architecturally limited to rectangular cloth simulation.
@@ -1135,23 +1459,23 @@ Possible evolution:
 
 Particle system
 
-      │
+      │
 
-      ├── Grid surface
+      ├── Grid surface
 
-      │      └── cloth / silk / paper
+      │      └── cloth / silk / paper
 
-      │
+      │
 
-      └── Arbitrary mesh
+      └── Arbitrary mesh
 
-             ├── sphere
+             ├── sphere
 
-             ├── cube
+             ├── cube
 
-             ├── product geometry
+             ├── product geometry
 
-             └── GLTF models
+             └── GLTF models
 
 ```
 
@@ -1189,23 +1513,23 @@ This is considered a **possible expansion path**, not a requirement for the curr
 
 This direction could enable:
 
-* interactive 3D product presentation
+- interactive 3D product presentation
 
-* material previews
+- material previews
 
-* footwear and sole deformation
+- footwear and sole deformation
 
-* cushions, mattresses and foam products
+- cushions, mattresses and foam products
 
-* rubber and silicone objects
+- rubber and silicone objects
 
-* flexible packaging
+- flexible packaging
 
-* interactive GLTF models
+- interactive GLTF models
 
-* creative 3D experiences
+- creative 3D experiences
 
-* game objects and environmental soft bodies
+- game objects and environmental soft bodies
 
 ## Product positioning
 
@@ -1217,11 +1541,11 @@ The intended opportunity is a lightweight layer between purely visual vertex def
 
 visual deformation
 
-        ↓
+        ↓
 
 SoftSurface
 
-        ↓
+        ↓
 
 general soft-body / engineering simulation
 
@@ -1229,16 +1553,16 @@ general soft-body / engineering simulation
 
 The emphasis should remain on:
 
-* browser-first usage
+- browser-first usage
 
-* simple APIs
+- simple APIs
 
-* renderer independence
+- renderer independence
 
-* real-time interaction
+- real-time interaction
 
-* visually plausible material behavior
+- visually plausible material behavior
 
-* creative-web and product-experience use cases
+- creative-web and product-experience use cases
 
 Architectural decisions made during the current MVP should avoid unnecessarily preventing this future evolution.
