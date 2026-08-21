@@ -16,8 +16,11 @@ export interface SelfCollisionStats {
   candidatePairs: number;
   testedPairs: number;
   contacts: number;
-}
 
+  hashBuildMs: number;
+  narrowPhaseMs: number;
+  totalMs: number;
+}
 export class SelfCollisionDetector {
   private readonly visitedTriangles: Uint32Array;
 
@@ -27,6 +30,12 @@ export class SelfCollisionDetector {
 
   private readonly spatialHash: TriangleSpatialHash;
 
+  /**
+   * Reused narrow-phase result.
+   *
+   * Avoids allocating a new result object for every
+   * point-triangle distance test.
+   */
   private readonly result: PointTriangleResult = {
     distanceSquared: 0,
 
@@ -39,24 +48,20 @@ export class SelfCollisionDetector {
     barycentricC: 0,
   };
 
-  private nextVisitStamp(): number {
-    this.visitStamp = (this.visitStamp + 1) >>> 0;
-
-    /*
-     * Uint32 overflow.
-     *
-     * Extremely rare, but reset the reusable
-     * marker buffer so stamp 0 never aliases
-     * old entries.
-     */
-    if (this.visitStamp === 0) {
-      this.visitedTriangles.fill(0);
-
-      this.visitStamp = 1;
-    }
-
-    return this.visitStamp;
-  }
+  /**
+   * Reused detector statistics.
+   *
+   * detect() can run every physics substep, so returning
+   * the same object avoids one allocation per substep.
+   */
+  private readonly stats: SelfCollisionStats = {
+    candidatePairs: 0,
+    testedPairs: 0,
+    contacts: 0,
+    hashBuildMs: 0,
+    narrowPhaseMs: 0,
+    totalMs: 0,
+  };
 
   constructor(
     private readonly triangles: TriangleIndices,
@@ -83,16 +88,23 @@ export class SelfCollisionDetector {
   }
 
   detect(positions: Float32Array): SelfCollisionStats {
+    const buildStart = performance.now();
+
     this.spatialHash.build(positions, this.triangles);
 
-    let candidatePairs = 0;
-    let testedPairs = 0;
-    let contacts = 0;
+    const buildEnd = performance.now();
+
+    const stats = this.stats;
+
+    stats.candidatePairs = 0;
+    stats.testedPairs = 0;
+    stats.contacts = 0;
 
     const particleCount = positions.length / 3;
 
     for (let particle = 0; particle < particleCount; particle++) {
       const visitStamp = this.nextVisitStamp();
+
       const particleOffset = particle * 3;
 
       const px = positions[particleOffset];
@@ -103,7 +115,7 @@ export class SelfCollisionDetector {
 
       const candidates = this.spatialHash.queryPoint(px, py, pz);
 
-      candidatePairs += candidates.length;
+      stats.candidatePairs += candidates.length;
 
       for (let i = 0; i < candidates.length; i++) {
         const triangleIndex = candidates[i];
@@ -122,15 +134,11 @@ export class SelfCollisionDetector {
 
         const c = this.triangles[indexOffset + 2];
 
-        /*
-         * A vertex must never collide with
-         * a triangle that contains itself.
-         */
         if (particle === a || particle === b || particle === c) {
           continue;
         }
 
-        testedPairs++;
+        stats.testedPairs++;
 
         const aOffset = a * 3;
         const bOffset = b * 3;
@@ -156,24 +164,42 @@ export class SelfCollisionDetector {
           this.result,
         );
 
-        /*
-         * Degenerate geometry can produce
-         * invalid numerical results.
-         */
         if (!Number.isFinite(this.result.distanceSquared)) {
           continue;
         }
 
         if (this.result.distanceSquared < this.thicknessSquared) {
-          contacts++;
+          stats.contacts++;
         }
       }
     }
 
-    return {
-      candidatePairs,
-      testedPairs,
-      contacts,
-    };
+    const detectEnd = performance.now();
+
+    stats.hashBuildMs = buildEnd - buildStart;
+
+    stats.narrowPhaseMs = detectEnd - buildEnd;
+
+    stats.totalMs = detectEnd - buildStart;
+
+    return stats;
+  }
+
+  private nextVisitStamp(): number {
+    this.visitStamp = (this.visitStamp + 1) >>> 0;
+
+    /**
+     * Uint32 overflow.
+     *
+     * Extremely rare, but reset the reusable marker
+     * buffer so stamp 0 never aliases old entries.
+     */
+    if (this.visitStamp === 0) {
+      this.visitedTriangles.fill(0);
+
+      this.visitStamp = 1;
+    }
+
+    return this.visitStamp;
   }
 }

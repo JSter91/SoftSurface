@@ -31,6 +31,13 @@ import {
   type SurfaceRelaxationOptions,
 } from "./SurfaceRelaxation.js";
 
+import { createGridTriangleIndices } from "./GridTopology.js";
+
+import {
+  SelfCollisionDetector,
+  type SelfCollisionStats,
+} from "./SelfCollisionDetector.js";
+
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
   preset?: SoftSurfacePreset;
@@ -40,6 +47,12 @@ export interface SoftSurfaceOptions
   iterations?: ConstraintSolverOptions["iterations"];
   fixedTimeStep?: number;
   maxSubsteps?: number;
+  selfCollision?: SoftSurfaceSelfCollisionOptions;
+}
+export interface SoftSurfaceSelfCollisionOptions {
+  enabled?: boolean;
+  thickness?: number;
+  cellSize?: number;
 }
 
 export class SoftSurface {
@@ -57,6 +70,10 @@ export class SoftSurface {
   private accumulator = 0;
 
   private readonly grabInteraction: GrabInteraction;
+
+  private readonly selfCollisionDetector: SelfCollisionDetector | null;
+
+  private lastSelfCollisionStats: Readonly<SelfCollisionStats> | null = null;
 
   constructor(options: SoftSurfaceOptions) {
     const preset = MATERIAL_PRESETS[options.preset ?? "cloth"];
@@ -77,20 +94,43 @@ export class SoftSurface {
       segmentsY: options.segmentsY,
     });
 
+    const spacingX = this.grid.width / this.grid.segmentsX;
+
+    const spacingY = this.grid.height / this.grid.segmentsY;
+
+    const minimumSpacing = Math.min(spacingX, spacingY);
+
+    const selfCollision = options.selfCollision;
+
+    if (selfCollision?.enabled) {
+      const thickness = selfCollision.thickness ?? minimumSpacing * 0.35;
+
+      const cellSize = selfCollision.cellSize ?? minimumSpacing * 2;
+
+      const triangles = createGridTriangleIndices(this.grid);
+
+      this.selfCollisionDetector = new SelfCollisionDetector(triangles, {
+        thickness,
+        cellSize,
+      });
+    } else {
+      this.selfCollisionDetector = null;
+    }
+
     this.grabInteraction = new GrabInteraction(this.grid);
 
     this.constraints = createGridConstraints(this.grid, {
-      structuralStiffness: structuralStiffness,
-      shearStiffness: shearStiffness,
-      bendStiffness: bendStiffness,
+      structuralStiffness,
+      shearStiffness,
+      bendStiffness,
       bendModel: options.bendModel,
     });
 
     this.integrator = new VerletIntegrator({
-      damping: damping,
+      damping,
       acceleration: options.acceleration,
     });
-
+    
     this.solver = new ConstraintSolver({
       iterations: options.iterations,
     });
@@ -134,6 +174,10 @@ export class SoftSurface {
     return this.grabInteraction.isActive;
   }
 
+  get selfCollisionStats(): Readonly<SelfCollisionStats> | null {
+    return this.lastSelfCollisionStats;
+  }
+
   grab(point: GrabPoint, options?: GrabOptions): number {
     return this.grabInteraction.grab(point, options);
   }
@@ -175,6 +219,11 @@ export class SoftSurface {
 
     this.relaxation.apply(this.grid, deltaTime);
     this.grabInteraction.apply();
+    if (this.selfCollisionDetector) {
+      this.lastSelfCollisionStats = this.selfCollisionDetector.detect(
+        this.grid.positions,
+      );
+    }
   }
 
   pin(particleIndex: number): void {

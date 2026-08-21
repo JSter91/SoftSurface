@@ -108,6 +108,10 @@ interface PlaygroundSettings {
 
   bendModel: BendModel;
   bendStiffness: number;
+
+  selfCollisionEnabled: boolean;
+  selfCollisionThickness: number;
+  selfCollisionCellSize: number;
 }
 
 const settings: PlaygroundSettings = {
@@ -127,6 +131,10 @@ const settings: PlaygroundSettings = {
 
   bendModel: "dihedral",
   bendStiffness: 0.3,
+
+  selfCollisionEnabled: false,
+  selfCollisionThickness: 0.03,
+  selfCollisionCellSize: 0.17,
 };
 
 /**
@@ -158,6 +166,12 @@ function createSurface(): {
     bendModel: settings.bendModel,
 
     bendStiffness: settings.bendStiffness,
+
+    selfCollision: {
+      enabled: settings.selfCollisionEnabled,
+      thickness: settings.selfCollisionThickness,
+      cellSize: settings.selfCollisionCellSize,
+    },
   });
 
   const topLeft = surface.grid.getParticleIndex(0, 0);
@@ -328,6 +342,34 @@ function createSelectControl<T extends string>(
   });
 
   row.append(name, select);
+
+  return row;
+}
+
+function createCheckboxControl(
+  labelText: string,
+  checked: boolean,
+  onChange: (checked: boolean) => void,
+): HTMLElement {
+  const row = document.createElement("label");
+
+  row.className = "control-row";
+
+  const name = document.createElement("span");
+
+  name.textContent = labelText;
+
+  const input = document.createElement("input");
+
+  input.type = "checkbox";
+
+  input.checked = checked;
+
+  input.addEventListener("change", () => {
+    onChange(input.checked);
+  });
+
+  row.append(name, input);
 
   return row;
 }
@@ -563,6 +605,53 @@ resolutionSection.appendChild(
 uiControls.appendChild(resolutionSection);
 
 /**
+ * Self collision
+ */
+const selfCollisionSection = createSection("Self collision");
+
+selfCollisionSection.appendChild(
+  createCheckboxControl("Enabled", settings.selfCollisionEnabled, (checked) => {
+    settings.selfCollisionEnabled = checked;
+
+    scheduleSurfaceRebuild();
+  }),
+);
+
+selfCollisionSection.appendChild(
+  createRangeControl(
+    "Thickness",
+    settings.selfCollisionThickness,
+    0.005,
+    0.1,
+    0.005,
+    (value) => {
+      settings.selfCollisionThickness = value;
+
+      scheduleSurfaceRebuild();
+    },
+    3,
+  ),
+);
+
+selfCollisionSection.appendChild(
+  createRangeControl(
+    "Cell size",
+    settings.selfCollisionCellSize,
+    0.05,
+    0.5,
+    0.01,
+    (value) => {
+      settings.selfCollisionCellSize = value;
+
+      scheduleSurfaceRebuild();
+    },
+    2,
+  ),
+);
+
+uiControls.appendChild(selfCollisionSection);
+
+/**
  * Performance HUD
  */
 const performanceSection = createSection("Performance");
@@ -571,6 +660,56 @@ const performanceOutput = document.createElement("pre");
 
 performanceOutput.className = "performance-output";
 
+const copyPerformanceButton = document.createElement("button");
+
+copyPerformanceButton.type = "button";
+copyPerformanceButton.className = "performance-copy-button";
+
+copyPerformanceButton.textContent = "Copy report";
+
+copyPerformanceButton.addEventListener("click", async () => {
+  const report = [
+    "SoftSurface Performance Report",
+    "",
+    "Configuration",
+    `Preset      ${settings.preset}`,
+    `Resolution  ${settings.segmentsX} × ${settings.segmentsY}`,
+    `Gravity Y   ${settings.gravityY}`,
+    `Iterations  ${settings.iterations}`,
+    `Timestep    ${settings.fixedTimeStep}`,
+    `Substeps    ${settings.maxSubsteps}`,
+    `Relaxation  ${settings.relaxation}`,
+    `Bend model  ${settings.bendModel}`,
+    `Bend stiff. ${settings.bendStiffness}`,
+    "",
+    "Self collision",
+    `Enabled     ${settings.selfCollisionEnabled}`,
+    `Thickness   ${settings.selfCollisionThickness}`,
+    `Cell size   ${settings.selfCollisionCellSize}`,
+    "",
+    "Performance",
+    performanceOutput.textContent,
+  ].join("\n");
+
+  try {
+    await navigator.clipboard.writeText(report);
+
+    copyPerformanceButton.textContent = "Copied";
+
+    window.setTimeout(() => {
+      copyPerformanceButton.textContent = "Copy report";
+    }, 1200);
+  } catch (error) {
+    console.error("Failed to copy performance report:", error);
+
+    copyPerformanceButton.textContent = "Copy failed";
+
+    window.setTimeout(() => {
+      copyPerformanceButton.textContent = "Copy report";
+    }, 1200);
+  }
+});
+
 performanceOutput.textContent = [
   "FPS       --",
   "Physics   --",
@@ -578,8 +717,7 @@ performanceOutput.textContent = [
   "Render    --",
 ].join("\n");
 
-performanceSection.appendChild(performanceOutput);
-
+performanceSection.append(performanceOutput, copyPerformanceButton);
 uiControls.appendChild(performanceSection);
 
 document.body.appendChild(uiControls);
@@ -665,7 +803,7 @@ function animate() {
 
     const fps = measuredFrames / (elapsed / 1000);
 
-    performanceOutput.textContent = [
+    const lines = [
       `FPS       ${fps.toFixed(1)}`,
       "",
       `Physics   ${physicsAverage.toFixed(2)} ms`,
@@ -676,7 +814,24 @@ function animate() {
       "",
       `Render    ${renderAverage.toFixed(2)} ms`,
       `          max ${renderMax.toFixed(2)} ms`,
-    ].join("\n");
+    ];
+
+    const collisionStats = surface.selfCollisionStats;
+
+    if (collisionStats) {
+      lines.push(
+        "",
+        "Self collision",
+        `Hash build  ${collisionStats.hashBuildMs.toFixed(2)} ms`,
+        `Narrow      ${collisionStats.narrowPhaseMs.toFixed(2)} ms`,
+        `Total       ${collisionStats.totalMs.toFixed(2)} ms`,
+        "",
+        `Candidates  ${collisionStats.candidatePairs}`,
+        `Tested      ${collisionStats.testedPairs}`,
+        `Contacts    ${collisionStats.contacts}`,
+      );
+    }
+    performanceOutput.textContent = lines.join("\n");
 
     physicsTotal = 0;
     geometryTotal = 0;
