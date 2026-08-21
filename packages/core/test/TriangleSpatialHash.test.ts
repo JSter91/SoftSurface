@@ -6,7 +6,7 @@ describe("TriangleSpatialHash", () => {
   it("finds a triangle in the same spatial cell", () => {
     const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
 
-    const triangles = new Uint32Array([0, 1, 2]);
+    const triangles = new Uint16Array([0, 1, 2]);
 
     const hash = new TriangleSpatialHash({
       cellSize: 1,

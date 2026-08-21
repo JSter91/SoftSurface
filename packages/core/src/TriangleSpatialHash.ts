@@ -12,14 +12,37 @@ export class TriangleSpatialHash {
   private readonly cellSize: number;
   private readonly padding: number;
 
-  private readonly buckets =
-    new Map<number, number[]>();
+  /**
+   * Power-of-two hash table.
+   *
+   * bucketHeads stores the first entry index for each slot.
+   * slotGenerations lets us reuse the table without clearing
+   * the entire Int32Array on every build.
+   */
+  private bucketHeads =
+    new Int32Array(0);
 
-  private readonly activeBuckets:
-    number[][] = [];
+  private slotGenerations =
+    new Uint32Array(0);
 
-  private readonly bucketPool:
-    number[][] = [];
+  private bucketMask = 0;
+  private generation = 0;
+
+  /**
+   * Linked-list entries.
+   *
+   * Each triangle-cell insertion occupies one entry.
+   */
+  private entryTriangles =
+    new Uint32Array(0);
+
+  private entryKeys =
+    new Uint32Array(0);
+
+  private entryNext =
+    new Int32Array(0);
+
+  private entryCount = 0;
 
   /**
    * Six values per triangle:
@@ -30,14 +53,21 @@ export class TriangleSpatialHash {
    * 3 = maxX
    * 4 = maxY
    * 5 = maxZ
-   *
-   * Bounds already include padding.
    */
   private triangleBounds =
     new Float32Array(0);
 
+  /**
+   * Reused query result.
+   *
+   * No array is allocated for individual point queries.
+   */
+  private readonly queryResults:
+    number[] = [];
+
   constructor(
-    options: TriangleSpatialHashOptions,
+    options:
+      TriangleSpatialHashOptions,
   ) {
     const {
       cellSize,
@@ -70,29 +100,31 @@ export class TriangleSpatialHash {
       );
     }
 
-    this.recycleBuckets();
-
     const triangleCount =
       triangles.length / 3;
 
-    const requiredBoundsLength =
-      triangleCount * 6;
+    this.ensureTableCapacity(
+      triangleCount,
+    );
+
+    this.ensureBoundsCapacity(
+      triangleCount,
+    );
 
     /**
-     * Grow only when needed.
+     * Initial estimate only.
      *
-     * Reuse the existing buffer between builds
-     * to avoid per-substep allocations.
+     * If deformation causes more cell insertions,
+     * the entry buffers grow automatically.
      */
-    if (
-      this.triangleBounds.length <
-      requiredBoundsLength
-    ) {
-      this.triangleBounds =
-        new Float32Array(
-          requiredBoundsLength,
-        );
-    }
+    this.ensureEntryCapacity(
+      Math.max(
+        1024,
+        triangleCount * 8,
+      ),
+    );
+
+    this.beginBuild();
 
     for (
       let triangleIndex = 0;
@@ -106,10 +138,14 @@ export class TriangleSpatialHash {
         triangles[indexOffset];
 
       const b =
-        triangles[indexOffset + 1];
+        triangles[
+          indexOffset + 1
+        ];
 
       const c =
-        triangles[indexOffset + 2];
+        triangles[
+          indexOffset + 2
+        ];
 
       const aOffset = a * 3;
       const bOffset = b * 3;
@@ -157,13 +193,6 @@ export class TriangleSpatialHash {
           positions[cOffset + 2],
         ) + this.padding;
 
-      /**
-       * Store the padded triangle AABB.
-       *
-       * SelfCollisionDetector can later perform
-       * a cheap exact AABB rejection before the
-       * more expensive point-triangle test.
-       */
       const boundsOffset =
         triangleIndex * 6;
 
@@ -224,32 +253,12 @@ export class TriangleSpatialHash {
             x <= maxCellX;
             x++
           ) {
-            const key =
+            this.insert(
               hashCell(
                 x,
                 y,
                 z,
-              );
-
-            let bucket =
-              this.buckets.get(key);
-
-            if (!bucket) {
-              bucket =
-                this.bucketPool.pop() ??
-                [];
-
-              this.buckets.set(
-                key,
-                bucket,
-              );
-
-              this.activeBuckets.push(
-                bucket,
-              );
-            }
-
-            bucket.push(
+              ),
               triangleIndex,
             );
           }
@@ -270,19 +279,51 @@ export class TriangleSpatialHash {
         this.toCell(z),
       );
 
-    return (
-      this.buckets.get(key) ??
-      EMPTY_RESULTS
-    );
+    const slot =
+      key & this.bucketMask;
+
+    this.queryResults.length = 0;
+
+    if (
+      this.slotGenerations[
+        slot
+      ] !== this.generation
+    ) {
+      return this.queryResults;
+    }
+
+    let entry =
+      this.bucketHeads[slot];
+
+    while (entry !== -1) {
+      /**
+       * Different 32-bit keys can map to the same
+       * flat-table slot.
+       *
+       * Filter those table collisions here.
+       *
+       * True hashCell collisions remain conservative
+       * false positives, matching the existing hash.
+       */
+      if (
+        this.entryKeys[
+          entry
+        ] === key
+      ) {
+        this.queryResults.push(
+          this.entryTriangles[
+            entry
+          ],
+        );
+      }
+
+      entry =
+        this.entryNext[entry];
+    }
+
+    return this.queryResults;
   }
 
-  /**
-   * Tests whether a point lies inside the padded
-   * AABB stored for a triangle.
-   *
-   * This is intentionally allocation-free and
-   * designed for the self-collision hot loop.
-   */
   containsPoint(
     triangleIndex: number,
     x: number,
@@ -294,7 +335,9 @@ export class TriangleSpatialHash {
 
     return (
       x >=
-        this.triangleBounds[offset] &&
+        this.triangleBounds[
+          offset
+        ] &&
       x <=
         this.triangleBounds[
           offset + 3
@@ -319,24 +362,210 @@ export class TriangleSpatialHash {
   }
 
   clear(): void {
-    this.recycleBuckets();
+    this.entryCount = 0;
+
+    this.advanceGeneration();
+
+    this.queryResults.length = 0;
   }
 
-  private recycleBuckets(): void {
-    for (
-      const bucket of
-      this.activeBuckets
-    ) {
-      bucket.length = 0;
+  private insert(
+    key: number,
+    triangleIndex: number,
+  ): void {
+    const slot =
+      key & this.bucketMask;
 
-      this.bucketPool.push(
-        bucket,
-      );
+    let previousHead = -1;
+
+    if (
+      this.slotGenerations[
+        slot
+      ] === this.generation
+    ) {
+      previousHead =
+        this.bucketHeads[
+          slot
+        ];
+    } else {
+      this.slotGenerations[
+        slot
+      ] = this.generation;
+
+      this.bucketHeads[
+        slot
+      ] = -1;
     }
 
-    this.activeBuckets.length = 0;
+    this.ensureEntryCapacity(
+      this.entryCount + 1,
+    );
 
-    this.buckets.clear();
+    const entry =
+      this.entryCount++;
+
+    this.entryTriangles[
+      entry
+    ] = triangleIndex;
+
+    this.entryKeys[
+      entry
+    ] = key;
+
+    this.entryNext[
+      entry
+    ] = previousHead;
+
+    this.bucketHeads[
+      slot
+    ] = entry;
+  }
+
+  private beginBuild(): void {
+    this.entryCount = 0;
+
+    this.advanceGeneration();
+  }
+
+  private advanceGeneration(): void {
+    this.generation =
+      (
+        this.generation + 1
+      ) >>> 0;
+
+    /**
+     * Extremely rare Uint32 overflow.
+     */
+    if (this.generation === 0) {
+      this.slotGenerations.fill(
+        0,
+      );
+
+      this.generation = 1;
+    }
+  }
+
+  private ensureTableCapacity(
+    triangleCount: number,
+  ): void {
+    /**
+     * Keep the table comfortably larger than the
+     * expected number of occupied spatial cells.
+     */
+    const minimumCapacity =
+      Math.max(
+        256,
+        triangleCount * 4,
+      );
+
+    const capacity =
+      nextPowerOfTwo(
+        minimumCapacity,
+      );
+
+    if (
+      this.bucketHeads.length >=
+      capacity
+    ) {
+      return;
+    }
+
+    this.bucketHeads =
+      new Int32Array(
+        capacity,
+      );
+
+    this.slotGenerations =
+      new Uint32Array(
+        capacity,
+      );
+
+    this.bucketMask =
+      capacity - 1;
+
+    /**
+     * Force the next build to establish fresh slots.
+     */
+    this.generation = 0;
+  }
+
+  private ensureBoundsCapacity(
+    triangleCount: number,
+  ): void {
+    const required =
+      triangleCount * 6;
+
+    if (
+      this.triangleBounds.length >=
+      required
+    ) {
+      return;
+    }
+
+    this.triangleBounds =
+      new Float32Array(
+        required,
+      );
+  }
+
+  private ensureEntryCapacity(
+    required: number,
+  ): void {
+    if (
+      this.entryTriangles.length >=
+      required
+    ) {
+      return;
+    }
+
+    let capacity =
+      Math.max(
+        1024,
+        this.entryTriangles.length ||
+          1024,
+      );
+
+    while (
+      capacity < required
+    ) {
+      capacity *= 2;
+    }
+
+    const triangles =
+      new Uint32Array(
+        capacity,
+      );
+
+    const keys =
+      new Uint32Array(
+        capacity,
+      );
+
+    const next =
+      new Int32Array(
+        capacity,
+      );
+
+    triangles.set(
+      this.entryTriangles,
+    );
+
+    keys.set(
+      this.entryKeys,
+    );
+
+    next.set(
+      this.entryNext,
+    );
+
+    this.entryTriangles =
+      triangles;
+
+    this.entryKeys =
+      keys;
+
+    this.entryNext =
+      next;
   }
 
   private toCell(
@@ -348,8 +577,17 @@ export class TriangleSpatialHash {
   }
 }
 
-const EMPTY_RESULTS:
-  readonly number[] = [];
+function nextPowerOfTwo(
+  value: number,
+): number {
+  let result = 1;
+
+  while (result < value) {
+    result *= 2;
+  }
+
+  return result;
+}
 
 function hashCell(
   x: number,
