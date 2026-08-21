@@ -58,3 +58,19 @@ export {
 export type {
   Constraint,
 } from "./Constraint.js";
+
+export {
+  TriangleSpatialHash,
+} from "./TriangleSpatialHash.js";
+
+export type {
+  TriangleSpatialHashOptions,
+} from "./TriangleSpatialHash.js";
+
+export {
+  createGridTriangleIndices,
+} from "./GridTopology.js";
+
+export type {
+  TriangleIndices,
+} from "./GridTopology.js";

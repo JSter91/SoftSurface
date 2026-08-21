@@ -1,0 +1,223 @@
+export interface TriangleSpatialHashOptions {
+  cellSize: number;
+  padding?: number;
+}
+
+type TriangleIndexArray =
+  | Uint16Array
+  | Uint32Array
+  | readonly number[];
+
+export class TriangleSpatialHash {
+  private readonly cellSize: number;
+  private readonly padding: number;
+
+  private readonly buckets =
+    new Map<number, number[]>();
+
+  constructor(
+    options: TriangleSpatialHashOptions,
+  ) {
+    const {
+      cellSize,
+      padding = 0,
+    } = options;
+
+    if (cellSize <= 0) {
+      throw new RangeError(
+        "cellSize must be greater than 0",
+      );
+    }
+
+    if (padding < 0) {
+      throw new RangeError(
+        "padding must be non-negative",
+      );
+    }
+
+    this.cellSize = cellSize;
+    this.padding = padding;
+  }
+
+  build(
+    positions: Float32Array,
+    triangles: TriangleIndexArray,
+  ): void {
+    if (triangles.length % 3 !== 0) {
+      throw new Error(
+        "triangle index array length must be divisible by 3",
+      );
+    }
+
+    this.buckets.clear();
+
+    const triangleCount =
+      triangles.length / 3;
+
+    for (
+      let triangleIndex = 0;
+      triangleIndex < triangleCount;
+      triangleIndex++
+    ) {
+      const indexOffset =
+        triangleIndex * 3;
+
+      const a =
+        triangles[indexOffset];
+
+      const b =
+        triangles[indexOffset + 1];
+
+      const c =
+        triangles[indexOffset + 2];
+
+      const aOffset = a * 3;
+      const bOffset = b * 3;
+      const cOffset = c * 3;
+
+      const minX =
+        Math.min(
+          positions[aOffset],
+          positions[bOffset],
+          positions[cOffset],
+        ) - this.padding;
+
+      const minY =
+        Math.min(
+          positions[aOffset + 1],
+          positions[bOffset + 1],
+          positions[cOffset + 1],
+        ) - this.padding;
+
+      const minZ =
+        Math.min(
+          positions[aOffset + 2],
+          positions[bOffset + 2],
+          positions[cOffset + 2],
+        ) - this.padding;
+
+      const maxX =
+        Math.max(
+          positions[aOffset],
+          positions[bOffset],
+          positions[cOffset],
+        ) + this.padding;
+
+      const maxY =
+        Math.max(
+          positions[aOffset + 1],
+          positions[bOffset + 1],
+          positions[cOffset + 1],
+        ) + this.padding;
+
+      const maxZ =
+        Math.max(
+          positions[aOffset + 2],
+          positions[bOffset + 2],
+          positions[cOffset + 2],
+        ) + this.padding;
+
+      const minCellX =
+        this.toCell(minX);
+
+      const minCellY =
+        this.toCell(minY);
+
+      const minCellZ =
+        this.toCell(minZ);
+
+      const maxCellX =
+        this.toCell(maxX);
+
+      const maxCellY =
+        this.toCell(maxY);
+
+      const maxCellZ =
+        this.toCell(maxZ);
+
+      for (
+        let z = minCellZ;
+        z <= maxCellZ;
+        z++
+      ) {
+        for (
+          let y = minCellY;
+          y <= maxCellY;
+          y++
+        ) {
+          for (
+            let x = minCellX;
+            x <= maxCellX;
+            x++
+          ) {
+            const key =
+              hashCell(x, y, z);
+
+            let bucket =
+              this.buckets.get(key);
+
+            if (!bucket) {
+              bucket = [];
+
+              this.buckets.set(
+                key,
+                bucket,
+              );
+            }
+
+            bucket.push(
+              triangleIndex,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  queryPoint(
+    x: number,
+    y: number,
+    z: number,
+  ): readonly number[] {
+    const key =
+      hashCell(
+        this.toCell(x),
+        this.toCell(y),
+        this.toCell(z),
+      );
+
+    return (
+      this.buckets.get(key) ??
+      EMPTY_RESULTS
+    );
+  }
+
+  clear(): void {
+    this.buckets.clear();
+  }
+
+  private toCell(
+    value: number,
+  ): number {
+    return Math.floor(
+      value / this.cellSize,
+    );
+  }
+}
+
+const EMPTY_RESULTS:
+  readonly number[] = [];
+
+function hashCell(
+  x: number,
+  y: number,
+  z: number,
+): number {
+  return (
+    (
+      Math.imul(x, 73856093) ^
+      Math.imul(y, 19349663) ^
+      Math.imul(z, 83492791)
+    ) >>> 0
+  );
+}
