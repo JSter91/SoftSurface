@@ -1,86 +1,8 @@
-Pasted markdown.md
-File
-direi di fare un commit e magari aggiornare:
-Pasted code.ts
-TypeScript
-puoi darmi la versione di main.ts del playground aggiornata? :
-
-Hai ragione. Fermiamoci qui e committiamo prima di collegare il filtro AABB al detector. Lo stato attuale è verde ed è un ottimo checkpoint.
-
-Io lo dividerei in 3 commit logici, così la history rimane leggibile.
-
-Primo: integrazione della detection in SoftSurface e statistiche:
-
-git add \
- packages/core/src/SoftSurface.ts \
- packages/core/src/SelfCollisionDetector.ts \
- packages/core/src/index.ts
-
-git commit -m "feat(core): integrate self-collision detection"
-
-Secondo: controlli e benchmark nel playground:
-
-git add \
- apps/playground/src/main.ts \
- apps/playground/src/style.css
-
-git commit -m "feat(playground): add self-collision benchmarking controls"
-
-Terzo: infrastruttura AABB appena aggiunta e testata:
-
-git add \
- packages/core/src/TriangleSpatialHash.ts \
- packages/core/test/TriangleSpatialHash.test.ts
-
-git commit -m "perf(core): cache padded triangle bounds"
-
-Poi:
-
-git push
-
-Prima dei commit, visto che hai già verificato che è tutto verde, farei comunque un ultimo:
-
-pnpm test
-pnpm build
-Nota sul profiler
-
-In questo momento abbiamo anche:
-
-hashBuildMs
-narrowPhaseMs
-totalMs
-
-dentro SelfCollisionStats.
-
-Avevamo inizialmente pensato di considerarli temporanei, ma per ora li terrei: il playground è esplicitamente il nostro ambiente di profiling e ci stanno dando dati molto utili. Quando avremo stabilizzato la self-collision potremo decidere se rimuoverli dall'API pubblica o spostarli dietro una modalità debug.
-
-Dopo questi tre commit, il working tree dovrebbe essere pulito. Solo allora facciamo il prossimo cambiamento: usare containsPoint() in SelfCollisionDetector e misurare quanti dei 25.402 narrow-phase test riusciamo a eliminare.
-
-Pasted markdown(1).md
-File
-dobbiamo aggiornare project state :
-ok
-
-Aggiornato. Ho mantenuto la struttura del PROJECT_STATE.md originale e ho incorporato tutto lo stato raggiunto oggi.
-
-In particolare ora include: self-collision detection e relativa architettura, GridTopology, TriangleSpatialHash, PointTriangleDistance, pooling dei bucket, deduplicazione dei candidati, integrazione in SoftSurface, controlli/HUD del playground, benchmark OFF/ON, profiling hash build / narrow phase, risultati dei test cellSize, cache AABB + containsPoint(), suite aggiornata a circa 70 test, e il nuovo prossimo milestone: AABB pre-filter prima della collision response. Ho anche distinto esplicitamente ciò che è già committato da ciò che è implementato/testato ma non ancora confermato come commit.
-
-Scarica PROJECT_STATE aggiornato
-
-Dopo averlo sostituito nella root della repo, questo può diventare il prossimo commit documentale.
-
-PROJECT_STATE_2026-08-21.md
-Documento
-
-Libreria
-/
-PROJECT_STATE_2026-08-21.md
-
 # SoftSurface — Project State
 
 **Last updated:** 2026-08-21
 
-**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection and performance optimization in progress
+**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection optimized with AABB prefilter; broad-phase benchmarking in progress
 
 ## Goal
 
@@ -114,21 +36,21 @@ SoftSurface/
 
 ├── packages/
 
-│   ├── core/
+│   ├── core/
 
-│   │   └── @softsurface/core
+│   │   └── @softsurface/core
 
-│   │
+│   │
 
-│   └── three/
+│   └── three/
 
-│       └── @softsurface/three
+│       └── @softsurface/three
 
 │
 
 └── apps/
 
-    └── playground/
+    └── playground/
 
 ```
 
@@ -194,23 +116,23 @@ Currently contains:
 
 pointer
 
-   ↓
+   ↓
 
 Three.js Raycaster
 
-   ↓
+   ↓
 
 mesh intersection
 
-   ↓
+   ↓
 
 world-space point
 
-   ↓
+   ↓
 
 mesh local-space conversion
 
-   ↓
+   ↓
 
 SoftSurface grab API
 
@@ -256,11 +178,11 @@ Current simulation model:
 
 Particle grid
 
-    ↓
+    ↓
 
 Verlet integration
 
-    ↓
+    ↓
 
 Structural constraints
 
@@ -268,23 +190,23 @@ Shear constraints
 
 Bend constraints
 
-    ↓
+    ↓
 
 Generic iterative constraint solver
 
-    ↓
+    ↓
 
 Surface relaxation
 
-    ↓
+    ↓
 
 Weighted grab interaction
 
-    ↓
+    ↓
 
 Self-collision detection (optional, detection-only)
 
-    ↓
+    ↓
 
 Updated Float32Array positions
 
@@ -552,21 +474,21 @@ Conceptually:
 
 ```text
 
-             grab center
+             grab center
 
-                  ↓
+                  ↓
 
-             strongest
+             strongest
 
-                ███
+                ███
 
-             ███████
+             ███████
 
-          ░░█████████░░
+          ░░█████████░░
 
-        ░░░░█████████░░░░
+        ░░░░█████████░░░░
 
-             weaker
+             weaker
 
 ```
 
@@ -592,19 +514,19 @@ Pinned particles are ignored by the grab interaction.
 
 pointerdown
 
-    ↓
+    ↓
 
 raycast against SoftSurface mesh
 
-    ↓
+    ↓
 
 intersection point in world space
 
-    ↓
+    ↓
 
 convert to mesh local space
 
-    ↓
+    ↓
 
 surface.grab(...)
 
@@ -618,23 +540,23 @@ Future pointer rays intersect this plane:
 
 pointer move
 
-    ↓
+    ↓
 
 camera ray
 
-    ↓
+    ↓
 
 drag plane
 
-    ↓
+    ↓
 
 world-space target
 
-    ↓
+    ↓
 
 local-space target
 
-    ↓
+    ↓
 
 surface.moveGrab(...)
 
@@ -714,11 +636,11 @@ Profiling separates:
 
 ```text
 
-surface.step() -> physics
+surface.step()      -> physics
 
-geometry.update() -> geometry / normals
+geometry.update()   -> geometry / normals
 
-renderer.render() -> render submission
+renderer.render()   -> render submission
 
 ```
 
@@ -726,20 +648,20 @@ On the current development machine and scene, representative pre-self-collision 
 
 ```text
 
-dihedral / 10 iterations ~5.97 ms physics avg
+dihedral / 10 iterations   ~5.97 ms physics avg
 
-dihedral / 6 iterations ~3.62 ms physics avg
+dihedral / 6 iterations    ~3.62 ms physics avg
 
-dihedral / 4 iterations ~2.62 ms physics avg
+dihedral / 4 iterations    ~2.62 ms physics avg
 
-dihedral / 2 iterations ~1.63 ms physics avg
+dihedral / 2 iterations    ~1.63 ms physics avg
 
-dihedral / 1 iteration ~0.98 ms physics avg
+dihedral / 1 iteration     ~0.98 ms physics avg
 
 dihedral / 1 iteration,
-relaxation 0.5 ~0.82 ms physics avg
+relaxation 0.5             ~0.82 ms physics avg
 
-distance / 10 iterations ~1.86 ms physics avg
+distance / 10 iterations   ~1.86 ms physics avg
 
 ```
 
@@ -772,8 +694,8 @@ A recent reference run with self-collision disabled produced:
 
 ```text
 
-Physics avg ~0.87 ms
-Physics max ~1.60 ms
+Physics avg   ~0.87 ms
+Physics max   ~1.60 ms
 
 ```
 
@@ -790,16 +712,16 @@ the same scene produced approximately:
 
 ```text
 
-Physics avg ~3.21 ms
-Physics max ~3.70 ms
+Physics avg    ~3.21 ms
+Physics max    ~3.70 ms
 
-Hash build ~1.10 ms
-Narrow phase ~1.60 ms
+Hash build     ~1.10 ms
+Narrow phase   ~1.60 ms
 Detector total ~2.70 ms
 
-Candidates ~35,782
-Tested ~25,402
-Contacts 0
+Candidates     ~35,782
+Tested         ~25,402
+Contacts       0
 
 ```
 
@@ -831,7 +753,7 @@ The current profile indicates that both stages matter:
 
 ```text
 
-hash build ~41% of detector cost
+hash build   ~41% of detector cost
 narrow phase ~59% of detector cost
 
 ```
@@ -850,6 +772,126 @@ The immediate next benchmark will measure how many of the current ~25k point-tri
 
 These numbers are machine/browser/scene-specific and should be treated as development benchmarks, not universal performance guarantees.
 
+Deterministic broad-phase comparison
+
+Manual playground comparisons were found useful for visual behavior but not precise enough for performance decisions because hand-driven deformations are not identical between runs.
+
+A deterministic benchmark methodology was therefore introduced for performance comparisons:
+
+same mesh geometry
+same positions buffer
+same self-collision parameters
+same broad-phase input
+correctness check first
+warmup
+multiple measured runs
+mean / min / max / percentile comparison
+
+Two reference scenarios were used:
+
+REST
+48 x 36 flat surface
+expected contacts: 0
+
+FOLDED
+48 x 36 deterministic mirrored fold
+controlled overlap
+expected contacts: > 0
+
+The experimental ParticleSpatialHash broad phase was compared against the existing triangle-based broad phase.
+
+Correctness matched exactly:
+
+REST
+tested = 3,456
+contacts = 0
+
+FOLDED
+tested = 16,992
+contacts = 10,152
+
+Vitest benchmark results:
+
+REST
+
+triangle
+mean 1.7678 ms
+min 1.5082 ms
+max 3.4658 ms
+
+particle
+mean 2.1058 ms
+min 1.8581 ms
+max 5.8163 ms
+
+triangle ≈ 1.19x faster
+
+FOLDED
+
+triangle
+mean 2.1906 ms
+min 1.9839 ms
+max 3.3391 ms
+
+particle
+mean 2.3940 ms
+min 2.2558 ms
+max 3.7806 ms
+
+triangle ≈ 1.09x faster
+
+The ParticleSpatialHash experiment demonstrated that reducing hash-build insertions does not automatically improve total self-collision performance.
+
+The particle-based strategy reduced hash construction cost substantially in manual profiling, but shifted more work into triangle-AABB cell traversal and candidate lookup.
+
+Decision:
+
+ParticleSpatialHash
+✓ correct
+✓ much cheaper hash construction
+✗ higher total detection cost
+✗ rejected for current implementation
+
+TriangleSpatialHash
+✓ correct
+✓ faster total REST benchmark
+✓ faster total FOLDED benchmark
+→ retained as current broad phase
+
+The experimental particle implementation and its temporary playground integration were removed after benchmarking. The working tree returned to the last committed triangle-based implementation.
+
+Performance-testing rule
+
+From this point forward, performance implementation decisions should use deterministic benchmarks whenever two algorithms or optimizations are being compared.
+
+Manual playground testing remains appropriate for:
+
+visual quality
+interaction feel
+stability
+fold behavior
+UX
+
+Deterministic benchmarks should be used for:
+
+algorithm A vs algorithm B
+optimization before vs after
+broad-phase changes
+solver hot-loop changes
+collision-performance regressions
+
+A performance optimization should only be retained when:
+
+functional/collision results remain equivalent;
+
+the same deterministic input is used;
+
+sufficient warmup is performed;
+
+multiple samples are measured;
+
+mean and tail behavior show a meaningful improvement.
+
 ### Pointer UX
 
 The playground distinguishes interaction based on where the primary pointer starts:
@@ -858,19 +900,19 @@ The playground distinguishes interaction based on where the primary pointer star
 
 LEFT DRAG on SoftSurface
 
-        ↓
+        ↓
 
 deform material
 
 LEFT DRAG on empty space
 
-        ↓
+        ↓
 
 orbit camera
 
 MOUSE WHEEL
 
-        ↓
+        ↓
 
 zoom
 
@@ -1042,17 +1084,14 @@ feat(core): add self-collision detection
 
 ```
 
-The following self-collision integration / benchmark work is implemented and passing locally but was not yet confirmed committed at this checkpoint:
+The padded-AABB pre-filter integration was benchmarked and committed.
 
-```text
+A temporary ParticleSpatialHash experiment was then implemented only for comparison. It produced equivalent detection results but worse total benchmark performance, so the experimental implementation, tests and playground integration were removed rather than committed.
 
-SoftSurface self-collision detector integration
-playground self-collision benchmark controls
-copyable benchmark report
-internal hash-build / narrow-phase timing
-padded triangle AABB cache + containsPoint()
+Current working tree at this checkpoint:
 
-```
+clean
+up to date with origin/main
 
 Commit hashes for later milestones should be added when needed.
 
@@ -1164,17 +1203,41 @@ During strong folding / penetration, hundreds of contacts can be detected, showi
 
 The current performance problem is more important than collision response: on the 48 x 36 reference mesh, detector cost is approximately `2.70 ms` before any positional response is added.
 
-The next optimization is therefore an exact padded-AABB pre-filter before point-triangle distance testing.
+The exact padded-AABB pre-filter is now integrated into SelfCollisionDetector.
+
+On the 48 x 36 reference resting scene, the pre-filter reduced expensive point-triangle tests from approximately:
+
+25,402
+→
+3,456
+
+while keeping:
+
+Contacts = 0
+
+Representative detector timing improved from approximately:
+
+Narrow phase
+1.60 ms
+→
+0.70 ms
+
+Detector total
+2.70 ms
+→
+~2.00 ms
+
+The broad phase is now the dominant remaining cost.
+
+A particle-based inverted broad-phase experiment was implemented and benchmarked deterministically, but the existing triangle-based broad phase remained faster overall and is therefore retained.
 
 Still required before self-collision can be considered physically implemented:
 
-- connect padded-AABB rejection to `SelfCollisionDetector`
-
-- benchmark rejection rate and narrow-phase cost
-
-- further optimize `TriangleSpatialHash.build()` if it remains near ~1 ms
+- further optimize TriangleSpatialHash total broad-phase cost where justified by deterministic benchmarks
 
 - add topology-aware exclusions if materially useful
+
+- implement vertex-triangle positional collision response
 
 - vertex-triangle positional collision response
 
@@ -1212,60 +1275,45 @@ Lighting/material presentation can still be improved later, but current developm
 
 ## Next milestone
 
-### Optimize self-collision detection before response
+### Optimize the retained triangle broad phase
 
-The playground tuning controls and Performance HUD are complete.
+The padded-AABB pre-filter is integrated and has already reduced narrow-phase work substantially.
 
-The immediate milestone is to reduce self-collision detection cost before introducing any collision response.
+A deterministic A/B benchmark was used to compare the current TriangleSpatialHash against an experimental ParticleSpatialHash.
 
-Current reference detector profile:
+Result:
 
-```text
+REST
+triangle ≈ 1.19x faster
 
-Hash build ~1.10 ms
-Narrow phase ~1.60 ms
-Total ~2.70 ms
+FOLDED
+triangle ≈ 1.09x faster
 
-Candidates ~35,782
-Tested ~25,402
-Contacts 0
+The particle broad phase was therefore rejected and removed.
 
-```
+The current optimization target remains the triangle-based broad phase, but future changes must be validated using deterministic benchmarks rather than hand-driven playground runs.
 
-The next concrete experiment is:
+Current reference behavior:
 
-```text
+REST
+tested pairs: 3,456
+contacts: 0
 
-spatial-hash candidate
-↓
-exact padded AABB test
-↓
-reject if outside
-↓
-pointTriangleDistanceSquared()
-↓
-contact candidate
+FOLDED deterministic benchmark
+tested pairs: 16,992
+contacts: 10,152
 
-```
+Immediate direction:
 
-The padded AABB cache and `containsPoint()` primitive are already implemented and tested. The next code change is to connect that pre-filter to `SelfCollisionDetector`.
+establish a reusable deterministic benchmark for the retained TriangleSpatialHash;
 
-Success criteria:
+profile and optimize only one broad-phase change at a time;
 
-- significantly reduce `testedPairs` from the current ~25k resting-scene value
+require identical contact/test correctness before comparing timings;
 
-- reduce narrow-phase time from ~1.60 ms
+keep an optimization only if mean and tail performance improve meaningfully;
 
-- avoid meaningful new allocation or GC pressure
-
-- re-run the exact same 48 x 36 benchmark with `cellSize: 0.10`
-
-After that:
-
-optimize spatial-hash build if it remains near ~1 ms;
-add topology-aware exclusions where they materially reduce work or false/local contacts;
-only then implement vertex-triangle collision response;
-benchmark self-collision OFF vs ON after every milestone.
+after broad-phase cost is acceptable, implement vertex-triangle collision response.
 
 Performance remains a continuous design constraint rather than an end-stage optimization task.
 
@@ -1335,7 +1383,13 @@ Performance remains a continuous design constraint rather than an end-stage opti
 
 [x] Padded triangle AABB cache / containsPoint primitive
 
-[ ] Self-collision exact AABB pre-filter integration
+[x] Self-collision exact AABB pre-filter integration
+
+[x] Deterministic self-collision benchmark methodology
+
+[x] Triangle vs particle broad-phase comparison
+
+[x] Retain TriangleSpatialHash after deterministic comparison
 
 [ ] Self-collision topology exclusions
 
@@ -1459,23 +1513,23 @@ Possible evolution:
 
 Particle system
 
-      │
+      │
 
-      ├── Grid surface
+      ├── Grid surface
 
-      │      └── cloth / silk / paper
+      │      └── cloth / silk / paper
 
-      │
+      │
 
-      └── Arbitrary mesh
+      └── Arbitrary mesh
 
-             ├── sphere
+             ├── sphere
 
-             ├── cube
+             ├── cube
 
-             ├── product geometry
+             ├── product geometry
 
-             └── GLTF models
+             └── GLTF models
 
 ```
 
@@ -1541,11 +1595,11 @@ The intended opportunity is a lightweight layer between purely visual vertex def
 
 visual deformation
 
-        ↓
+        ↓
 
 SoftSurface
 
-        ↓
+        ↓
 
 general soft-body / engineering simulation
 
