@@ -1,23 +1,16 @@
-import type {
-  GrabOptions,
-  SoftSurface,
-} from "@softsurface/core";
+import type { GrabOptions, SoftSurface, GrabPoint } from "@softsurface/core";
 
-import {
-  Camera,
-  Mesh,
-  Plane,
-  Raycaster,
-  Vector2,
-  Vector3,
-} from "three";
+import { Camera, Mesh, Plane, Raycaster, Vector2, Vector3 } from "three";
 
 export interface SoftSurfacePointerInteractionOptions {
   grab?: GrabOptions;
-  onGrabStart?: () => void;
+
+  onGrabStart?: (point: GrabPoint) => void;
+
+  onGrabMove?: (point: GrabPoint) => void;
+
   onGrabEnd?: () => void;
 }
-
 export class SoftSurfacePointerInteraction {
   private readonly surface: SoftSurface;
   private readonly mesh: Mesh;
@@ -25,9 +18,12 @@ export class SoftSurfacePointerInteraction {
   private readonly domElement: HTMLElement;
 
   private readonly grabOptions?: GrabOptions;
-  private readonly onGrabStart?: () => void;
-  private readonly onGrabEnd?: () => void;
 
+  private readonly onGrabStart?: (point: GrabPoint) => void;
+
+  private readonly onGrabMove?: (point: GrabPoint) => void;
+
+  private readonly onGrabEnd?: () => void;
   private readonly raycaster = new Raycaster();
   private readonly pointer = new Vector2();
 
@@ -53,6 +49,7 @@ export class SoftSurfacePointerInteraction {
 
     this.grabOptions = options.grab;
     this.onGrabStart = options.onGrabStart;
+    this.onGrabMove = options.onGrabMove;
     this.onGrabEnd = options.onGrabEnd;
 
     /*
@@ -67,20 +64,11 @@ export class SoftSurfacePointerInteraction {
       true,
     );
 
-    this.domElement.addEventListener(
-      "pointermove",
-      this.handlePointerMove,
-    );
+    this.domElement.addEventListener("pointermove", this.handlePointerMove);
 
-    this.domElement.addEventListener(
-      "pointerup",
-      this.handlePointerUp,
-    );
+    this.domElement.addEventListener("pointerup", this.handlePointerUp);
 
-    this.domElement.addEventListener(
-      "pointercancel",
-      this.handlePointerUp,
-    );
+    this.domElement.addEventListener("pointercancel", this.handlePointerUp);
   }
 
   dispose(): void {
@@ -92,25 +80,14 @@ export class SoftSurfacePointerInteraction {
       true,
     );
 
-    this.domElement.removeEventListener(
-      "pointermove",
-      this.handlePointerMove,
-    );
+    this.domElement.removeEventListener("pointermove", this.handlePointerMove);
 
-    this.domElement.removeEventListener(
-      "pointerup",
-      this.handlePointerUp,
-    );
+    this.domElement.removeEventListener("pointerup", this.handlePointerUp);
 
-    this.domElement.removeEventListener(
-      "pointercancel",
-      this.handlePointerUp,
-    );
+    this.domElement.removeEventListener("pointercancel", this.handlePointerUp);
   }
 
-  private readonly handlePointerDown = (
-    event: PointerEvent,
-  ): void => {
+  private readonly handlePointerDown = (event: PointerEvent): void => {
     /*
      * Primary/left button only.
      */
@@ -124,29 +101,15 @@ export class SoftSurfacePointerInteraction {
 
     this.updatePointer(event);
 
-    this.camera.updateWorldMatrix(
-      true,
-      false,
-    );
+    this.camera.updateWorldMatrix(true, false);
 
-    this.mesh.updateWorldMatrix(
-      true,
-      false,
-    );
+    this.mesh.updateWorldMatrix(true, false);
 
-    this.raycaster.setFromCamera(
-      this.pointer,
-      this.camera,
-    );
+    this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const intersections =
-      this.raycaster.intersectObject(
-        this.mesh,
-        false,
-      );
+    const intersections = this.raycaster.intersectObject(this.mesh, false);
 
-    const intersection =
-      intersections[0];
+    const intersection = intersections[0];
 
     /*
      * Important:
@@ -162,17 +125,13 @@ export class SoftSurfacePointerInteraction {
     /*
      * Raycaster intersection is in world space.
      */
-    this.worldPoint.copy(
-      intersection.point,
-    );
+    this.worldPoint.copy(intersection.point);
 
     /*
      * Build a drag plane passing through the hit point
      * and facing the camera.
      */
-    this.camera.getWorldDirection(
-      this.planeNormal,
-    );
+    this.camera.getWorldDirection(this.planeNormal);
 
     this.dragPlane.setFromNormalAndCoplanarPoint(
       this.planeNormal,
@@ -183,23 +142,14 @@ export class SoftSurfacePointerInteraction {
      * Convert world-space hit point into
      * SoftSurface local coordinates.
      */
-    this.localPoint.copy(
-      this.worldPoint,
-    );
+    this.localPoint.copy(this.worldPoint);
 
-    this.mesh.worldToLocal(
-      this.localPoint,
-    );
+    this.mesh.worldToLocal(this.localPoint);
 
-    const affectedParticles =
-      this.surface.grab(
-        [
-          this.localPoint.x,
-          this.localPoint.y,
-          this.localPoint.z,
-        ],
-        this.grabOptions,
-      );
+    const affectedParticles = this.surface.grab(
+      [this.localPoint.x, this.localPoint.y, this.localPoint.z],
+      this.grabOptions,
+    );
 
     /*
      * A mesh intersection alone isn't enough:
@@ -212,120 +162,82 @@ export class SoftSurfacePointerInteraction {
     /*
      * Only NOW does the pointer belong to SoftSurface.
      */
-    this.activePointerId =
-      event.pointerId;
+    this.activePointerId = event.pointerId;
 
     /*
      * Because this listener runs in capture phase,
      * OrbitControls will see itself disabled when its
      * pointerdown handler runs.
      */
-    this.onGrabStart?.();
-
-    this.domElement.setPointerCapture(
-      event.pointerId,
-    );
+    this.onGrabStart?.([
+      this.localPoint.x,
+      this.localPoint.y,
+      this.localPoint.z,
+    ]);
+    this.domElement.setPointerCapture(event.pointerId);
   };
 
-  private readonly handlePointerMove = (
-    event: PointerEvent,
-  ): void => {
-    if (
-      this.activePointerId !==
-      event.pointerId
-    ) {
+  private readonly handlePointerMove = (event: PointerEvent): void => {
+    if (this.activePointerId !== event.pointerId) {
       return;
     }
 
     this.updatePointer(event);
 
-    this.camera.updateWorldMatrix(
-      true,
-      false,
-    );
+    this.camera.updateWorldMatrix(true, false);
 
-    this.mesh.updateWorldMatrix(
-      true,
-      false,
-    );
+    this.mesh.updateWorldMatrix(true, false);
 
-    this.raycaster.setFromCamera(
-      this.pointer,
-      this.camera,
-    );
+    this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const intersection =
-      this.raycaster.ray.intersectPlane(
-        this.dragPlane,
-        this.worldPoint,
-      );
+    const intersection = this.raycaster.ray.intersectPlane(
+      this.dragPlane,
+      this.worldPoint,
+    );
 
     if (!intersection) {
       return;
     }
 
-    this.localPoint.copy(
-      this.worldPoint,
-    );
+    this.localPoint.copy(this.worldPoint);
 
-    this.mesh.worldToLocal(
-      this.localPoint,
-    );
+    this.mesh.worldToLocal(this.localPoint);
 
     this.surface.moveGrab([
       this.localPoint.x,
       this.localPoint.y,
       this.localPoint.z,
     ]);
+
+    this.onGrabMove?.([
+      this.localPoint.x,
+      this.localPoint.y,
+      this.localPoint.z,
+    ]);
   };
 
-  private readonly handlePointerUp = (
-    event: PointerEvent,
-  ): void => {
-    if (
-      this.activePointerId !==
-      event.pointerId
-    ) {
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    if (this.activePointerId !== event.pointerId) {
       return;
     }
 
-    if (
-      this.domElement.hasPointerCapture(
-        event.pointerId,
-      )
-    ) {
-      this.domElement.releasePointerCapture(
-        event.pointerId,
-      );
+    if (this.domElement.hasPointerCapture(event.pointerId)) {
+      this.domElement.releasePointerCapture(event.pointerId);
     }
 
     this.release();
   };
 
-  private updatePointer(
-    event: PointerEvent,
-  ): void {
-    const rect =
-      this.domElement.getBoundingClientRect();
+  private updatePointer(event: PointerEvent): void {
+    const rect = this.domElement.getBoundingClientRect();
 
-    this.pointer.x =
-      ((event.clientX - rect.left) /
-        rect.width) *
-        2 -
-      1;
+    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
 
-    this.pointer.y =
-      -(
-        (event.clientY - rect.top) /
-        rect.height
-      ) *
-        2 +
-      1;
+    this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
   private release(): void {
-    const wasActive =
-      this.activePointerId !== null;
+    const wasActive = this.activePointerId !== null;
 
     this.surface.release();
     this.activePointerId = null;

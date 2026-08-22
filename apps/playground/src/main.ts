@@ -9,6 +9,14 @@ import {
   SoftSurfacePointerInteraction,
 } from "@softsurface/three";
 
+import {
+  ScenarioRecorder,
+  type RecordedScenario,
+  type ScenarioConfiguration,
+} from "./ScenarioRecording.js";
+
+import { ScenarioReplay } from "./ScenarioReplay.js";
+
 import "./style.css";
 
 /**
@@ -189,12 +197,100 @@ function createSurface(): {
   };
 }
 
+function createSurfaceFromScenario(
+  scenario: RecordedScenario,
+): {
+  surface: SoftSurface;
+  geometry: SoftSurfaceGeometry;
+} {
+  const configuration =
+    scenario.configuration;
+
+  const surface = new SoftSurface({
+    width: configuration.width,
+    height: configuration.height,
+
+    segmentsX:
+      configuration.segmentsX,
+
+    segmentsY:
+      configuration.segmentsY,
+
+    preset:
+      configuration.preset as SoftSurfacePreset,
+
+    acceleration: [
+      0,
+      configuration.gravityY,
+      0,
+    ],
+
+    iterations:
+      configuration.iterations,
+
+    fixedTimeStep:
+      configuration.fixedTimeStep,
+
+    maxSubsteps:
+      configuration.maxSubsteps,
+
+    relaxation:
+      configuration.relaxation,
+
+    bendModel:
+      configuration.bendModel as BendModel,
+
+    bendStiffness:
+      configuration.bendStiffness,
+
+    selfCollision: {
+      enabled:
+        configuration.selfCollisionEnabled,
+
+      thickness:
+        configuration.selfCollisionThickness,
+
+      cellSize:
+        configuration.selfCollisionCellSize,
+    },
+  });
+
+  const geometry =
+    new SoftSurfaceGeometry(surface);
+
+  return {
+    surface,
+    geometry,
+  };
+}
+
 /**
  * Initial surface
  */
 
 let { surface, geometry } = createSurface();
 
+const scenarioRecorder = new ScenarioRecorder();
+
+let recordedScenario: RecordedScenario | null = null;
+
+let scenarioReplay: ScenarioReplay | null = null;
+
+/**
+ * Total number of physics substeps executed
+ * by the current playground session.
+ *
+ * This counter is never reset by recording.
+ */
+let physicsStep = 0;
+
+/**
+ * Global physics step at which the current
+ * recording started.
+ *
+ * Recorded event steps are relative to this.
+ */
+let recordingStartStep = 0;
 const mesh = new THREE.Mesh(geometry, material);
 mesh.frustumCulled = false;
 
@@ -218,12 +314,17 @@ function createInteraction(): SoftSurfacePointerInteraction {
         strength: 1,
       },
 
-      onGrabStart: () => {
+      onGrabStart: (point) => {
         orbitControls.enabled = false;
+        scenarioRecorder.recordGrab(point[0], point[1], point[2]);
       },
-
+      onGrabMove: (point) => {
+        scenarioRecorder.recordMoveGrab(point[0], point[1], point[2]);
+      },
       onGrabEnd: () => {
         orbitControls.enabled = true;
+
+        scenarioRecorder.recordRelease();
       },
     },
   );
@@ -652,6 +753,249 @@ selfCollisionSection.appendChild(
 uiControls.appendChild(selfCollisionSection);
 
 /**
+ * Scenario recording
+ */
+const recordingSection = createSection("Scenario recording");
+
+const startRecordingButton = document.createElement("button");
+
+startRecordingButton.type = "button";
+
+startRecordingButton.textContent = "Start recording";
+
+const stopRecordingButton = document.createElement("button");
+
+stopRecordingButton.type = "button";
+
+stopRecordingButton.textContent = "Stop recording";
+
+stopRecordingButton.disabled = true;
+
+const exportRecordingButton = document.createElement("button");
+
+exportRecordingButton.type = "button";
+
+exportRecordingButton.textContent = "Export JSON";
+
+exportRecordingButton.disabled = true;
+
+const replayRecordingButton = document.createElement("button");
+
+replayRecordingButton.type = "button";
+
+replayRecordingButton.textContent = "Replay last recording";
+
+replayRecordingButton.disabled = true;
+
+const recordingStatus = document.createElement("pre");
+
+recordingStatus.textContent = "Not recording";
+
+startRecordingButton.addEventListener("click", () => {
+  console.log("[scenario] start clicked");
+  const configuration: ScenarioConfiguration = {
+    width: 4,
+    height: 3,
+
+    segmentsX: settings.segmentsX,
+
+    segmentsY: settings.segmentsY,
+
+    preset: settings.preset,
+
+    gravityY: settings.gravityY,
+
+    iterations: settings.iterations,
+
+    fixedTimeStep: settings.fixedTimeStep,
+
+    maxSubsteps: settings.maxSubsteps,
+
+    relaxation: settings.relaxation,
+
+    bendModel: settings.bendModel,
+
+    bendStiffness: settings.bendStiffness,
+
+    selfCollisionEnabled: settings.selfCollisionEnabled,
+
+    selfCollisionThickness: settings.selfCollisionThickness,
+
+    selfCollisionCellSize: settings.selfCollisionCellSize,
+  };
+
+  /**
+   * Keep the global simulation counter intact.
+   *
+   * The recorder uses this value only as an
+   * origin for relative scenario steps.
+   */
+  recordingStartStep = physicsStep;
+
+  recordedScenario = scenarioRecorder.start(
+    configuration,
+    surface.positions,
+    surface.previousPositions,
+    surface.inverseMasses,
+  );
+
+  console.log("[scenario] raw result", recordedScenario);
+
+  console.log("[scenario] started", {
+    isRecording: scenarioRecorder.isRecording,
+
+    scenarioCreated: recordedScenario != null,
+
+    type: typeof recordedScenario,
+
+    initialPositions: recordedScenario?.initialPositions?.length,
+
+    events: recordedScenario?.events?.length,
+  });
+  startRecordingButton.textContent = "Recording...";
+  startRecordingButton.disabled = true;
+
+  stopRecordingButton.disabled = false;
+  recordingStatus.textContent = "Recording...";
+});
+
+recordingSection.append(
+  startRecordingButton,
+  stopRecordingButton,
+  exportRecordingButton,
+  replayRecordingButton,
+  recordingStatus,
+);
+
+uiControls.appendChild(recordingSection);
+
+stopRecordingButton.addEventListener("click", () => {
+  console.log("[scenario] stop clicked");
+  console.log("[scenario] before stop", {
+    isRecording: scenarioRecorder.isRecording,
+
+    scenarioCreated: recordedScenario != null,
+
+    events: recordedScenario?.events.length,
+  });
+  scenarioRecorder.stop();
+
+  exportRecordingButton.disabled = recordedScenario == null;
+
+  replayRecordingButton.disabled = recordedScenario === null;
+
+  if (recordedScenario) {
+    const events = recordedScenario.events;
+
+    const firstEvent = events[0];
+
+    const lastEvent = events[events.length - 1];
+
+    recordingStatus.textContent = [
+      "Recording complete",
+      `Events: ${events.length}`,
+      `First step: ${firstEvent?.step ?? "--"}`,
+      `Last step: ${lastEvent?.step ?? "--"}`,
+    ].join("\n");
+
+    console.log("Recorded scenario:", recordedScenario);
+  }
+  startRecordingButton.disabled = false;
+
+  startRecordingButton.textContent = "Start recording";
+
+  stopRecordingButton.disabled = true;
+});
+
+exportRecordingButton.addEventListener("click", () => {
+  if (!recordedScenario) {
+    return;
+  }
+
+  const json = JSON.stringify(recordedScenario, null, 2);
+
+  const blob = new Blob([json], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+
+  link.download = "softsurface-scenario.json";
+
+  link.click();
+
+  URL.revokeObjectURL(url);
+});
+
+replayRecordingButton.addEventListener(
+  "click",
+  () => {
+    if (!recordedScenario) {
+      return;
+    }
+
+    const next =
+      createSurfaceFromScenario(
+        recordedScenario,
+      );
+
+    const oldGeometry =
+      geometry;
+
+    /**
+     * Remove interaction attached to
+     * the previous surface.
+     */
+    interaction.dispose();
+
+    surface =
+      next.surface;
+
+    geometry =
+      next.geometry;
+
+    mesh.geometry =
+      geometry;
+
+    /**
+     * Recreate pointer interaction so it
+     * references the new surface.
+     */
+    interaction =
+      createInteraction();
+
+    oldGeometry.dispose();
+
+    /**
+     * ScenarioReplay restores:
+     *
+     * positions
+     * previousPositions
+     * inverseMasses
+     *
+     * from the exact recording snapshot.
+     */
+    scenarioReplay =
+      new ScenarioReplay(
+        surface,
+        recordedScenario,
+        {
+          radius: 0.45,
+          strength: 1,
+        },
+      );
+
+    geometry.update();
+
+    recordingStatus.textContent =
+      "Replaying...";
+  },
+);
+/**
  * Performance HUD
  */
 const performanceSection = createSection("Performance");
@@ -759,8 +1103,26 @@ function animate() {
 
   const physicsStart = performance.now();
 
-  surface.step(delta);
+  let executedSubsteps: number;
 
+  if (scenarioReplay) {
+    /**
+     * Replay advances exactly one recorded
+     * physics step at a time.
+     *
+     * Render frame rate therefore cannot change
+     * the physics sequence being reproduced.
+     */
+    executedSubsteps = scenarioReplay.step();
+  } else {
+    executedSubsteps = surface.step(delta);
+
+    physicsStep += executedSubsteps;
+
+    if (scenarioRecorder.isRecording) {
+      scenarioRecorder.setStep(physicsStep - recordingStartStep);
+    }
+  }
   const physicsEnd = performance.now();
 
   geometry.update();

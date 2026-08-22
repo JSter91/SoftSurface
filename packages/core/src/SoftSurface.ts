@@ -203,9 +203,9 @@ export class SoftSurface {
     this.grabInteraction.release();
   }
 
-  step(deltaTime: number): void {
+  step(deltaTime: number): number {
     if (deltaTime <= 0) {
-      return;
+      return 0;
     }
 
     const maxFrameTime = this.fixedTimeStep * this.maxSubsteps;
@@ -223,6 +223,8 @@ export class SoftSurface {
       this.accumulator -= this.fixedTimeStep;
       substeps++;
     }
+
+    return substeps;
   }
 
   private substep(deltaTime: number): void {
