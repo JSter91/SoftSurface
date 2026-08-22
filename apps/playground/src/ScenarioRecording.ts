@@ -69,7 +69,12 @@ export class ScenarioRecorder {
   ): RecordedScenario {
     console.log("[ScenarioRecorder] start() ENTER");
 
-    this.events.length = 0;
+    /**
+     * A fresh array, never a truncation: the
+     * scenario returned by a previous start()
+     * keeps a live reference to the old one.
+     */
+    this.events = [];
     this.currentStep = 0;
     this.recording = true;
 

@@ -197,66 +197,46 @@ function createSurface(): {
   };
 }
 
-function createSurfaceFromScenario(
-  scenario: RecordedScenario,
-): {
+function createSurfaceFromScenario(scenario: RecordedScenario): {
   surface: SoftSurface;
   geometry: SoftSurfaceGeometry;
 } {
-  const configuration =
-    scenario.configuration;
+  const configuration = scenario.configuration;
 
   const surface = new SoftSurface({
     width: configuration.width,
     height: configuration.height,
 
-    segmentsX:
-      configuration.segmentsX,
+    segmentsX: configuration.segmentsX,
 
-    segmentsY:
-      configuration.segmentsY,
+    segmentsY: configuration.segmentsY,
 
-    preset:
-      configuration.preset as SoftSurfacePreset,
+    preset: configuration.preset as SoftSurfacePreset,
 
-    acceleration: [
-      0,
-      configuration.gravityY,
-      0,
-    ],
+    acceleration: [0, configuration.gravityY, 0],
 
-    iterations:
-      configuration.iterations,
+    iterations: configuration.iterations,
 
-    fixedTimeStep:
-      configuration.fixedTimeStep,
+    fixedTimeStep: configuration.fixedTimeStep,
 
-    maxSubsteps:
-      configuration.maxSubsteps,
+    maxSubsteps: configuration.maxSubsteps,
 
-    relaxation:
-      configuration.relaxation,
+    relaxation: configuration.relaxation,
 
-    bendModel:
-      configuration.bendModel as BendModel,
+    bendModel: configuration.bendModel as BendModel,
 
-    bendStiffness:
-      configuration.bendStiffness,
+    bendStiffness: configuration.bendStiffness,
 
     selfCollision: {
-      enabled:
-        configuration.selfCollisionEnabled,
+      enabled: configuration.selfCollisionEnabled,
 
-      thickness:
-        configuration.selfCollisionThickness,
+      thickness: configuration.selfCollisionThickness,
 
-      cellSize:
-        configuration.selfCollisionCellSize,
+      cellSize: configuration.selfCollisionCellSize,
     },
   });
 
-  const geometry =
-    new SoftSurfaceGeometry(surface);
+  const geometry = new SoftSurfaceGeometry(surface);
 
   return {
     surface,
@@ -825,6 +805,13 @@ startRecordingButton.addEventListener("click", () => {
   };
 
   /**
+   * Recording while a replay drives the surface
+   * would capture events against a sequence the
+   * user is not controlling.
+   */
+  scenarioReplay = null;
+
+  /**
    * Keep the global simulation counter intact.
    *
    * The recorder uses this value only as an
@@ -931,70 +918,53 @@ exportRecordingButton.addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-replayRecordingButton.addEventListener(
-  "click",
-  () => {
-    if (!recordedScenario) {
-      return;
-    }
+replayRecordingButton.addEventListener("click", () => {
+  if (!recordedScenario) {
+    return;
+  }
 
-    const next =
-      createSurfaceFromScenario(
-        recordedScenario,
-      );
+  const next = createSurfaceFromScenario(recordedScenario);
 
-    const oldGeometry =
-      geometry;
+  const oldGeometry = geometry;
 
-    /**
-     * Remove interaction attached to
-     * the previous surface.
-     */
-    interaction.dispose();
+  /**
+   * Remove interaction attached to
+   * the previous surface.
+   */
+  interaction.dispose();
 
-    surface =
-      next.surface;
+  surface = next.surface;
 
-    geometry =
-      next.geometry;
+  geometry = next.geometry;
 
-    mesh.geometry =
-      geometry;
+  mesh.geometry = geometry;
 
-    /**
-     * Recreate pointer interaction so it
-     * references the new surface.
-     */
-    interaction =
-      createInteraction();
+  /**
+   * Recreate pointer interaction so it
+   * references the new surface.
+   */
+  interaction = createInteraction();
 
-    oldGeometry.dispose();
+  oldGeometry.dispose();
 
-    /**
-     * ScenarioReplay restores:
-     *
-     * positions
-     * previousPositions
-     * inverseMasses
-     *
-     * from the exact recording snapshot.
-     */
-    scenarioReplay =
-      new ScenarioReplay(
-        surface,
-        recordedScenario,
-        {
-          radius: 0.45,
-          strength: 1,
-        },
-      );
+  /**
+   * ScenarioReplay restores:
+   *
+   * positions
+   * previousPositions
+   * inverseMasses
+   *
+   * from the exact recording snapshot.
+   */
+  scenarioReplay = new ScenarioReplay(surface, recordedScenario, {
+    radius: 0.45,
+    strength: 1,
+  });
 
-    geometry.update();
+  geometry.update();
 
-    recordingStatus.textContent =
-      "Replaying...";
-  },
-);
+  recordingStatus.textContent = "Replaying...";
+});
 /**
  * Performance HUD
  */
@@ -1114,15 +1084,27 @@ function animate() {
      * the physics sequence being reproduced.
      */
     executedSubsteps = scenarioReplay.step();
+
+    /**
+     * The last recorded event is the release.
+     * Once it is applied the replay is over and
+     * the surface returns to live simulation.
+     */
+    if (scenarioReplay.hasProcessedAllEvents) {
+      scenarioReplay = null;
+
+      recordingStatus.textContent = "Replay complete";
+    }
   } else {
     executedSubsteps = surface.step(delta);
-
-    physicsStep += executedSubsteps;
-
-    if (scenarioRecorder.isRecording) {
-      scenarioRecorder.setStep(physicsStep - recordingStartStep);
-    }
   }
+
+  physicsStep += executedSubsteps;
+
+  if (scenarioRecorder.isRecording) {
+    scenarioRecorder.setStep(physicsStep - recordingStartStep);
+  }
+
   const physicsEnd = performance.now();
 
   geometry.update();
