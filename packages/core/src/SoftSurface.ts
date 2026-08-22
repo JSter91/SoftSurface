@@ -33,10 +33,9 @@ import {
 
 import { createGridTriangleIndices } from "./GridTopology.js";
 
-import {
-  SelfCollisionDetector,
-  type SelfCollisionStats,
-} from "./SelfCollisionDetector.js";
+import type { SelfCollisionStats } from "./SelfCollisionDetector.js";
+
+import { SelfCollisionSolver } from "./SelfCollisionSolver.js";
 
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
@@ -71,10 +70,21 @@ export class SoftSurface {
 
   private readonly grabInteraction: GrabInteraction;
 
-  private readonly selfCollisionDetector: SelfCollisionDetector | null;
+  private readonly selfCollisionSolver: SelfCollisionSolver | null;
 
-  private lastSelfCollisionStats: Readonly<SelfCollisionStats> | null = null;
+  private readonly selfCollisionStatsBuffer: SelfCollisionStats = {
+    candidatePairs: 0,
+    testedPairs: 0,
+    contacts: 0,
 
+    aabbRejected: 0,
+
+    hashBuildMs: 0,
+    narrowPhaseMs: 0,
+    totalMs: 0,
+  };
+
+  private hasSelfCollisionStats = false;
   constructor(options: SoftSurfaceOptions) {
     const preset = MATERIAL_PRESETS[options.preset ?? "cloth"];
 
@@ -109,12 +119,12 @@ export class SoftSurface {
 
       const triangles = createGridTriangleIndices(this.grid);
 
-      this.selfCollisionDetector = new SelfCollisionDetector(triangles, {
+      this.selfCollisionSolver = new SelfCollisionSolver(triangles, {
         thickness,
         cellSize,
       });
     } else {
-      this.selfCollisionDetector = null;
+      this.selfCollisionSolver = null;
     }
 
     this.grabInteraction = new GrabInteraction(this.grid);
@@ -130,7 +140,7 @@ export class SoftSurface {
       damping,
       acceleration: options.acceleration,
     });
-    
+
     this.solver = new ConstraintSolver({
       iterations: options.iterations,
     });
@@ -175,9 +185,12 @@ export class SoftSurface {
   }
 
   get selfCollisionStats(): Readonly<SelfCollisionStats> | null {
-    return this.lastSelfCollisionStats;
-  }
+    if (!this.hasSelfCollisionStats) {
+      return null;
+    }
 
+    return this.selfCollisionStatsBuffer;
+  }
   grab(point: GrabPoint, options?: GrabOptions): number {
     return this.grabInteraction.grab(point, options);
   }
@@ -219,10 +232,37 @@ export class SoftSurface {
 
     this.relaxation.apply(this.grid, deltaTime);
     this.grabInteraction.apply();
-    if (this.selfCollisionDetector) {
-      this.lastSelfCollisionStats = this.selfCollisionDetector.detect(
+    if (this.selfCollisionSolver) {
+      const solverStats = this.selfCollisionSolver.solve(
         this.grid.positions,
+        this.grid.previousPositions,
+        this.grid.inverseMasses,
       );
+
+      const stats = this.selfCollisionStatsBuffer;
+
+      stats.candidatePairs = solverStats.candidatePairs;
+
+      stats.testedPairs = solverStats.testedPairs;
+
+      stats.contacts = solverStats.contacts;
+
+      stats.aabbRejected = solverStats.aabbRejected;
+
+      stats.hashBuildMs = solverStats.hashBuildMs;
+
+      /**
+       * Preserve the existing public stats API for now.
+       *
+       * Solver detectionMs has the same role as the old
+       * detector narrowPhaseMs: traversal + narrow phase
+       * after spatial-hash construction.
+       */
+      stats.narrowPhaseMs = solverStats.detectionMs;
+
+      stats.totalMs = solverStats.totalMs;
+
+      this.hasSelfCollisionStats = true;
     }
   }
 
