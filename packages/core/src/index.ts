@@ -1,8 +1,6 @@
 export { ParticleGrid } from "./ParticleGrid.js";
 
-export type {
-  ParticleGridOptions,
-} from "./types.js";
+export type { ParticleGridOptions } from "./types.js";
 
 export {
   VerletIntegrator,
@@ -24,10 +22,7 @@ export {
   type ConstraintSolverOptions,
 } from "./ConstraintSolver.js";
 
-export {
-  SoftSurface,
-  type SoftSurfaceOptions,
-} from "./SoftSurface.js";
+export { SoftSurface, type SoftSurfaceOptions } from "./SoftSurface.js";
 
 export {
   MATERIAL_PRESETS,
@@ -51,43 +46,33 @@ export {
   computeDihedralAngle,
 } from "./DihedralBendingConstraint.js";
 
-export {
-  buildGridDihedralConstraints,
-} from "./DihedralConstraintBuilder.js";
+export { buildGridDihedralConstraints } from "./DihedralConstraintBuilder.js";
 
-export type {
-  Constraint,
-} from "./Constraint.js";
+export type { Constraint } from "./Constraint.js";
 
-export {
-  TriangleSpatialHash,
-} from "./TriangleSpatialHash.js";
+export { TriangleSpatialHash } from "./TriangleSpatialHash.js";
 
-export type {
-  TriangleSpatialHashOptions,
-} from "./TriangleSpatialHash.js";
+export type { TriangleSpatialHashOptions } from "./TriangleSpatialHash.js";
 
-export {
-  createGridTriangleIndices,
-} from "./GridTopology.js";
+export { createGridTriangleIndices } from "./GridTopology.js";
 
-export type {
-  TriangleIndices,
-} from "./GridTopology.js";
+export type { TriangleIndices } from "./GridTopology.js";
 
-export {
-  pointTriangleDistanceSquared,
-} from "./PointTriangleDistance.js";
+export { pointTriangleDistanceSquared } from "./PointTriangleDistance.js";
 
-export type {
-  PointTriangleResult,
-} from "./PointTriangleDistance.js";
+export type { PointTriangleResult } from "./PointTriangleDistance.js";
 
-export {
-  SelfCollisionDetector,
-} from "./SelfCollisionDetector.js";
+export { SelfCollisionDetector } from "./SelfCollisionDetector.js";
 
 export type {
   SelfCollisionDetectorOptions,
   SelfCollisionStats,
 } from "./SelfCollisionDetector.js";
+
+export {
+  SelfCollisionSolver,
+  type SelfCollisionSolverOptions,
+  type SelfCollisionSolverStats,
+} from "./SelfCollisionSolver.js";
+
+

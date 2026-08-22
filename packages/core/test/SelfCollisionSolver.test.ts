@@ -344,5 +344,98 @@ describe(
         );
       },
     );
+
+    it(
+      "misses a vertex that crosses a triangle between discrete positions",
+      () => {
+        const positions =
+          new Float32Array([
+            // Triangle A
+            0, 0, 0,
+
+            // Triangle B
+            1, 0, 0,
+
+            // Triangle C
+            0, 1, 0,
+
+            // Particle P — current position
+            0.25, 0.25, -0.04,
+          ]);
+
+        const previousPositions =
+          new Float32Array([
+            // Triangle A
+            0, 0, 0,
+
+            // Triangle B
+            1, 0, 0,
+
+            // Triangle C
+            0, 1, 0,
+
+            // Particle P — previous position
+            0.25, 0.25, 0.04,
+          ]);
+
+        const inverseMasses =
+          new Float32Array([
+            0,
+            0,
+            0,
+            1,
+          ]);
+
+        const triangles =
+          new Uint16Array([
+            0, 1, 2,
+          ]);
+
+        const solver =
+          new SelfCollisionSolver(
+            triangles,
+            {
+              thickness: 0.03,
+              cellSize: 1,
+            },
+          );
+
+        const before =
+          new Float32Array(
+            positions,
+          );
+
+        const stats =
+          solver.solve(
+            positions,
+            previousPositions,
+            inverseMasses,
+          );
+
+        /**
+         * The particle travelled from +0.04 to -0.04,
+         * therefore its trajectory crossed the triangle
+         * plane at z = 0.
+         *
+         * Both discrete endpoints are farther than the
+         * collision thickness (0.03), so the current
+         * discrete detector misses the crossing.
+         */
+        expect(
+          stats.contacts,
+        ).toBe(0);
+
+        expect(
+          stats.resolvedContacts,
+        ).toBe(0);
+
+        expect(
+          Array.from(positions),
+        ).toEqual(
+          Array.from(before),
+        );
+      },
+    );
+
   },
 );
