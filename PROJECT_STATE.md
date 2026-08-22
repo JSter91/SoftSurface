@@ -1,36 +1,33 @@
-# SoftSurface — Project State
+SoftSurface — Project State
 
-**Last updated:** 2026-08-21
+Last updated: 2026-08-22
 
-**Status:** Active development — interactive physics MVP; dihedral bending established; self-collision detection optimized with AABB prefilter and flat typed-array triangle spatial hash; deterministic performance baselines established; collision response is the next physics milestone
+Status: Active development — interactive physics MVP; dihedral bending established; self-collision detection optimized; isolated vertex-triangle collision response implemented; two-pass self-collision solver implemented and benchmarked; integration into SoftSurface is the next physics milestone
 
-## Goal
+Goal
 
 SoftSurface is a lightweight, renderer-agnostic engine for real-time deformable surfaces on the web.
 
 The goal is to support materials and behaviors such as:
 
-* cloth
+cloth
 
-* silk
+silk
 
-* paper
+paper
 
-* rubber
+rubber
 
-* gel
+gel
 
-* membranes
+membranes
 
-* interactive deformable surfaces
+interactive deformable surfaces
 
 The physics engine must remain independent from rendering libraries such as Three.js.
 
----
+Architecture
 
-## Architecture
-
-```text
 
 SoftSurface/
 
@@ -52,67 +49,69 @@ SoftSurface/
 
     └── playground/
 
-```
 
-### `@softsurface/core`
+@softsurface/core
 
 Renderer-independent physics engine.
 
 Currently contains:
 
-* `ParticleGrid`
+ParticleGrid
 
-* `VerletIntegrator`
+VerletIntegrator
 
-* generic `Constraint` interface
+generic Constraint interface
 
-* `DistanceConstraint`
+DistanceConstraint
 
-* `DihedralBendingConstraint`
+DihedralBendingConstraint
 
-* `ConstraintBuilder`
+ConstraintBuilder
 
-* `DihedralConstraintBuilder`
+DihedralConstraintBuilder
 
-* `ConstraintSolver`
+ConstraintSolver
 
-* `SurfaceRelaxation`
+SurfaceRelaxation
 
-* `SoftSurface`
+SoftSurface
 
-* `GrabInteraction`
+GrabInteraction
 
-* `GridTopology`
+GridTopology
 
-* `TriangleSpatialHash`
+TriangleSpatialHash
 
-* `PointTriangleDistance`
+PointTriangleDistance
 
-* `SelfCollisionDetector`
+SelfCollisionDetector
 
-* material presets
+VertexTriangleCollisionResolver
 
-* fixed timestep simulation
+SelfCollisionSolver
 
-* weighted grab interaction
+material presets
 
-The core has **no dependency on Three.js, React or the DOM**.
+fixed timestep simulation
 
-### `@softsurface/three`
+weighted grab interaction
+
+The core has no dependency on Three.js, React or the DOM.
+
+@softsurface/three
 
 Three.js adapter.
 
 Currently contains:
 
-* `SoftSurfaceGeometry`
+SoftSurfaceGeometry
 
-* `SoftSurfacePointerInteraction`
+SoftSurfacePointerInteraction
 
-`SoftSurfaceGeometry` exposes the simulation's `Float32Array` directly as a Three.js `BufferAttribute`, avoiding a position-array copy on every frame.
+SoftSurfaceGeometry exposes the simulation's Float32Array directly as a Three.js BufferAttribute, avoiding a position-array copy on every frame.
 
-`SoftSurfacePointerInteraction` handles renderer-specific pointer interaction:
+SoftSurfacePointerInteraction handles renderer-specific pointer interaction:
 
-```text
 
 pointer
 
@@ -136,45 +135,41 @@ mesh local-space conversion
 
 SoftSurface grab API
 
-```
 
 The physics core therefore remains unaware of:
 
-* pointers
+pointers
 
-* DOM events
+DOM events
 
-* cameras
+cameras
 
-* raycasting
+raycasting
 
-* Three.js meshes
+Three.js meshes
 
-### `apps/playground`
+apps/playground
 
 Vite + Three.js development environment.
 
 It is used only for:
 
-* visual testing
+visual testing
 
-* material tuning
+material tuning
 
-* interaction experiments
+interaction experiments
 
-* performance testing
+performance testing
 
-* examples
+examples
 
 It is not part of the published library.
 
----
-
-## Physics model
+Physics model
 
 Current simulation model:
 
-```text
 
 Particle grid
 
@@ -204,105 +199,89 @@ Weighted grab interaction
 
     ↓
 
-Self-collision detection (optional, detection-only)
+Self-collision detection (optional; current `SoftSurface` integration is still detection-only)
 
     ↓
 
 Updated Float32Array positions
 
-```
 
-### Structural constraints
+Structural constraints
 
 Control how much the surface can stretch.
 
 High stiffness:
 
-```text
 
 o---o---o---o
 
-```
 
 The distance between particles remains almost constant.
 
-### Bend constraints
+Bend constraints
 
 SoftSurface now supports two bending models:
 
-```text
 
 distance
 
 dihedral
 
-```
 
 The original distance-based bend model connects particles two grid cells apart. It is inexpensive, but strong deformation visibly preserves the rectangular grid structure and can produce square-looking folds.
 
-The new `dihedral` model constrains the angle between adjacent triangles. In visual testing it produced a major improvement in fold quality and almost eliminated the visible grid artifacts when combined with moderate/high relaxation.
+The new dihedral model constrains the angle between adjacent triangles. In visual testing it produced a major improvement in fold quality and almost eliminated the visible grid artifacts when combined with moderate/high relaxation.
 
 The current playground quality baseline therefore uses:
 
-```text
 
 bendModel: "dihedral"
 
-```
 
 The distance model is retained for comparison and as a cheaper fallback.
 
-### Shear constraints
+Shear constraints
 
 Control diagonal deformation and prevent grid cells from collapsing into strongly skewed shapes.
 
-### Surface relaxation
+Surface relaxation
 
-Local surface relaxation is implemented in `SurfaceRelaxation`.
+Local surface relaxation is implemented in SurfaceRelaxation.
 
-It smooths local particle configurations after the main constraint solve and applies the same positional correction to `previousPositions` so it does not inject artificial Verlet velocity.
+It smooths local particle configurations after the main constraint solve and applies the same positional correction to previousPositions so it does not inject artificial Verlet velocity.
 
 Relaxation is timestep-independent: the configured strength is converted relative to a 60 Hz reference step, so changing the physics substep does not unintentionally change the effective amount of smoothing.
 
 Visual testing showed that relatively high relaxation values can be useful with dihedral bending for suppressing residual grid artifacts. Current playground testing has produced strong results around:
 
-```text
 
 relaxation: 0.5
 
-```
 
 This remains an experimental playground value rather than a library default or finalized material-preset value.
 
----
-
-## Simulation timing
+Simulation timing
 
 Physics uses a fixed timestep.
 
 Current default:
 
-```text
 
 1 / 120 s
 
-```
 
 with a configurable maximum number of substeps.
 
-`surface.step(deltaTime)` accepts the render-frame delta, while the engine internally advances physics using fixed simulation steps.
+surface.step(deltaTime) accepts the render-frame delta, while the engine internally advances physics using fixed simulation steps.
 
 This keeps the simulation more consistent across different rendering frame rates and prevents large frame-time spikes from destabilizing the solver.
 
----
-
-## Constraint stiffness
+Constraint stiffness
 
 Constraint stiffness is normalized across solver iterations.
 
 Originally the same stiffness was applied on every solver iteration, which caused values such as:
 
-```text
 
 0.95
 
@@ -312,37 +291,31 @@ Originally the same stiffness was applied on every solver iteration, which cause
 
 0.55
 
-```
 
-to all approach an effective stiffness close to `1` when using many solver iterations.
+to all approach an effective stiffness close to 1 when using many solver iterations.
 
 The solver now converts global stiffness into a per-iteration stiffness.
 
 Conceptually:
 
-```text
 
 iterationStiffness =
 
 1 - (1 - stiffness)^(1 / iterations)
 
-```
 
 This makes material parameters significantly more meaningful.
 
 The visual comparison in the playground confirmed that the normalization was necessary: before the correction, most presets appeared nearly identical.
 
-The solver now also caches the per-iteration stiffness for each constraint group. The normalized stiffness therefore does not recompute `Math.pow()` inside the hot solver loop on every iteration and substep.
+The solver now also caches the per-iteration stiffness for each constraint group. The normalized stiffness therefore does not recompute Math.pow() inside the hot solver loop on every iteration and substep.
 
 This optimization preserved the same physics behavior while reducing unnecessary CPU work.
 
----
-
-## Material presets
+Material presets
 
 Currently supported:
 
-```text
 
 cloth
 
@@ -354,11 +327,9 @@ rubber
 
 gel
 
-```
 
 Important material dimensions currently include:
 
-```text
 
 structuralStiffness
 
@@ -368,25 +339,21 @@ bendStiffness
 
 damping
 
-```
 
-### Stretch vs bend
+Stretch vs bend
 
 An important distinction discovered during visual tuning:
 
-```text
 
 stretch ≠ bend
 
-```
 
-**Stretch** controls how much the material can change its dimensions.
+Stretch controls how much the material can change its dimensions.
 
-**Bend** controls how easily the material can fold while preserving those dimensions.
+Bend controls how easily the material can fold while preserving those dimensions.
 
 A cloth-like material generally needs:
 
-```text
 
 high structural stiffness
 
@@ -394,71 +361,67 @@ high structural stiffness
 
 relatively low bend stiffness
 
-```
 
 This allows it to resist stretching while still forming folds.
 
-### Current interpretation
+Current interpretation
 
-**Cloth**
+Cloth
 
-* low stretch
+low stretch
 
-* medium bend resistance
+medium bend resistance
 
-* moderate movement
+moderate movement
 
-**Silk**
+Silk
 
-* low stretch
+low stretch
 
-* very low bend resistance
+very low bend resistance
 
-* easy folding
+easy folding
 
-* light response
+light response
 
-**Paper**
+Paper
 
-* almost no stretch
+almost no stretch
 
-* high bend resistance
+high bend resistance
 
-* tends to retain flatter shapes
+tends to retain flatter shapes
 
-**Rubber**
+Rubber
 
-* more stretch
+more stretch
 
-* medium bend resistance
+medium bend resistance
 
-* stronger elastic response
+stronger elastic response
 
-**Gel**
+Gel
 
-* moderate stretch
+moderate stretch
 
-* low bend resistance
+low bend resistance
 
-* high damping
+high damping
 
-* slower / softer response
+slower / softer response
 
 Preset values are still experimental and will continue to be tuned visually.
 
-The current preset `bendStiffness` values were originally tuned for distance-based bending. They should not yet be considered calibrated for the dihedral model because the two formulations do not have equivalent stiffness semantics.
+The current preset bendStiffness values were originally tuned for distance-based bending. They should not yet be considered calibrated for the dihedral model because the two formulations do not have equivalent stiffness semantics.
 
-`relaxation` is also not yet baked into the material presets; it remains an explicit simulation/playground tuning parameter until the new bending model is fully calibrated.
+relaxation is also not yet baked into the material presets; it remains an explicit simulation/playground tuning parameter until the new bending model is fully calibrated.
 
----
+Grab interaction
 
-## Grab interaction
-
-Weighted grab interaction is implemented in `@softsurface/core`.
+Weighted grab interaction is implemented in @softsurface/core.
 
 Public API:
 
-```ts
 
 surface.grab(...)
 
@@ -466,13 +429,11 @@ surface.moveGrab(...)
 
 surface.release()
 
-```
 
-The grab affects a **region of particles**, not a single vertex.
+The grab affects a region of particles, not a single vertex.
 
 Conceptually:
 
-```text
 
              grab center
 
@@ -490,7 +451,6 @@ Conceptually:
 
              weaker
 
-```
 
 Particles closer to the grab center receive a stronger influence.
 
@@ -498,19 +458,16 @@ A smooth radial falloff is used so the interaction produces a deformation rather
 
 Relative particle offsets around the initial grab point are preserved.
 
-`previousPositions` are moved together with current positions during the grab correction so that the positional correction does not accidentally generate excessive Verlet velocity.
+previousPositions are moved together with current positions during the grab correction so that the positional correction does not accidentally generate excessive Verlet velocity.
 
 Pinned particles are ignored by the grab interaction.
 
----
+Three.js pointer interaction
 
-## Three.js pointer interaction
+SoftSurfacePointerInteraction converts browser pointer input into the renderer-independent core grab API.
 
-`SoftSurfacePointerInteraction` converts browser pointer input into the renderer-independent core grab API.
+Grab workflow
 
-### Grab workflow
-
-```text
 
 pointerdown
 
@@ -530,13 +487,11 @@ convert to mesh local space
 
 surface.grab(...)
 
-```
 
 During dragging, a mathematical plane is created through the original intersection point and oriented toward the camera.
 
 Future pointer rays intersect this plane:
 
-```text
 
 pointer move
 
@@ -560,55 +515,51 @@ local-space target
 
 surface.moveGrab(...)
 
-```
 
 This provides stable 3D dragging from a 2D pointer.
 
----
-
-## Playground status
+Playground status
 
 The Three.js playground currently supports:
 
-* rectangular deformable surface
+rectangular deformable surface
 
-* two upper corners pinned
+two upper corners pinned
 
-* gravity / zero-gravity testing
+gravity / zero-gravity testing
 
-* real-time simulation
+real-time simulation
 
-* `MeshStandardMaterial`
+MeshStandardMaterial
 
-* runtime material preset selector
+runtime material preset selector
 
-* weighted mouse grab
+weighted mouse grab
 
-* camera orbit
+camera orbit
 
-* zoom
+zoom
 
-* viewing deformations from arbitrary angles
+viewing deformations from arbitrary angles
 
-* distance vs dihedral bending experiments
+distance vs dihedral bending experiments
 
-* lightweight per-frame performance instrumentation
+lightweight per-frame performance instrumentation
 
-* runtime tuning controls for material, bending, solver and resolution
+runtime tuning controls for material, bending, solver and resolution
 
-* self-collision enable / thickness / cell-size controls
+self-collision enable / thickness / cell-size controls
 
-* copyable Performance Report output
+copyable Performance Report output
 
-* self-collision candidate / tested / contact counters
+self-collision candidate / tested / contact counters
 
-* temporary detector timing for hash-build vs narrow-phase profiling
+temporary detector timing for hash-build vs narrow-phase profiling
 
-### Current experimental quality baseline
+Current experimental quality baseline
 
 The best current visual/performance balance observed in the playground is approximately:
 
-```ts
 
 segmentsX: 48
 
@@ -628,15 +579,13 @@ bendStiffness: 0.3
 
 relaxation: 0.5
 
-```
 
 These values are a playground benchmark configuration, not finalized library defaults.
 
-### Performance observations
+Performance observations
 
 Profiling separates:
 
-```text
 
 surface.step()      -> physics
 
@@ -644,11 +593,9 @@ geometry.update()   -> geometry / normals
 
 renderer.render()   -> render submission
 
-```
 
 On the current development machine and scene, representative pre-self-collision measurements were:
 
-```text
 
 dihedral / 10 iterations   ~5.97 ms physics avg
 
@@ -665,19 +612,17 @@ relaxation 0.5             ~0.82 ms physics avg
 
 distance / 10 iterations   ~1.86 ms physics avg
 
-```
 
 The distance model was cheaper at the same iteration count, but its visual fold quality was substantially worse.
 
 Reducing dihedral solver iterations from 10 to 1 produced no obvious visual degradation in the current playground test while reducing physics CPU time dramatically.
 
-### Self-collision detection benchmark
+Self-collision detection benchmark
 
-Self-collision is currently detection-only. No collision response or positional correction has been implemented yet.
+The current SoftSurface integration is still detection-only. Positional collision response now exists in isolated core modules and has not yet been connected to the live simulation pipeline.
 
 Current reference configuration:
 
-```text
 
 preset: cloth
 resolution: 48 x 36
@@ -690,29 +635,23 @@ bendModel: dihedral
 bendStiffness: 0.3
 selfCollisionThickness: 0.03
 
-```
 
 A recent reference run with self-collision disabled produced:
 
-```text
 
 Physics avg   ~0.87 ms
 Physics max   ~1.60 ms
 
-```
 
 With self-collision detection enabled and:
 
-```text
 
 cellSize: 0.10
 thickness: 0.03
 
-```
 
 the same scene produced approximately:
 
-```text
 
 Physics avg    ~3.21 ms
 Physics max    ~3.70 ms
@@ -725,13 +664,11 @@ Candidates     ~35,782
 Tested         ~25,402
 Contacts       0
 
-```
 
 The first self-collision performance gate therefore does not pass yet. Detection alone currently adds several milliseconds of CPU work even when the resting surface has no actual contacts.
 
 Cell-size experiments showed the expected tradeoff between candidate count and hash-construction cost:
 
-```text
 
 cellSize 0.17 -> ~4.01 ms physics, ~68,688 candidates, ~58,320 tested
 cellSize 0.12 -> ~3.17 ms physics, ~44,875 candidates, ~34,507 tested
@@ -739,50 +676,41 @@ cellSize 0.10 -> ~3.16-3.26 ms physics, ~35,770 candidates, ~25,390 tested
 cellSize 0.08 -> ~4.15 ms physics, ~31,888 candidates, ~21,516 tested
 cellSize 0.06 -> ~4.15 ms physics, ~25,207 candidates, ~14,835 tested
 
-```
 
 The current practical sweet spot is around:
 
-```text
 
 cellSize: 0.10 - 0.12
 
-```
 
 Smaller cells reduce the number of narrow-phase tests but increase spatial-hash construction work enough to make the total slower.
 
 The current profile indicates that both stages matter:
 
-```text
 
 hash build   ~41% of detector cost
 narrow phase ~59% of detector cost
 
-```
 
-Each triangle's padded AABB is stored in a reusable `Float32Array` inside `TriangleSpatialHash`.
+Each triangle's padded AABB is stored in a reusable Float32Array inside TriangleSpatialHash.
 
 An allocation-free:
 
-```ts
 
 containsPoint(triangleIndex, x, y, z)
 
-```
 
-check is integrated into `SelfCollisionDetector` before the expensive point-to-triangle distance test.
+check is integrated into SelfCollisionDetector before the expensive point-to-triangle distance test.
 
 On the 48 x 36 REST reference scene, this reduced expensive point-triangle tests from approximately:
 
-```text
 
 25,402
 →
 3,456
 
-```
 
-and reduced representative narrow-phase cost from roughly `1.60 ms` to `~0.70 ms` while preserving `Contacts = 0`.
+and reduced representative narrow-phase cost from roughly 1.60 ms to ~0.70 ms while preserving Contacts = 0.
 
 These numbers are machine/browser/scene-specific and should be treated as development benchmarks, not universal performance guarantees.
 
@@ -791,7 +719,6 @@ Deterministic broad-phase comparison
 Manual playground comparisons were found useful for visual behavior but not precise enough for performance decisions because hand-driven deformations are not identical between runs.
 
 A deterministic benchmark methodology was therefore introduced for performance comparisons:
-
 
 same mesh geometry
 same positions buffer
@@ -802,9 +729,7 @@ warmup
 multiple measured runs
 mean / min / max / percentile comparison
 
-
 Two reference scenarios were used:
-
 
 REST
 48 x 36 flat surface
@@ -815,11 +740,9 @@ FOLDED
 controlled overlap
 expected contacts: > 0
 
-
 The experimental ParticleSpatialHash broad phase was compared against the existing triangle-based broad phase.
 
 Correctness matched exactly:
-
 
 REST
 tested = 3,456
@@ -829,9 +752,7 @@ FOLDED
 tested = 16,992
 contacts = 10,152
 
-
 Vitest benchmark results:
-
 
 REST
 
@@ -847,7 +768,6 @@ max    5.8163 ms
 
 triangle ≈ 1.19x faster
 
-
 FOLDED
 
 triangle
@@ -862,13 +782,11 @@ max    3.7806 ms
 
 triangle ≈ 1.09x faster
 
-
 The ParticleSpatialHash experiment demonstrated that reducing hash-build insertions does not automatically improve total self-collision performance.
 
 The particle-based strategy reduced hash construction cost substantially in manual profiling, but shifted more work into triangle-AABB cell traversal and candidate lookup.
 
 Decision:
-
 
 ParticleSpatialHash
 ✓ correct
@@ -882,7 +800,6 @@ TriangleSpatialHash
 ✓ faster total FOLDED benchmark
 → retained as current broad phase
 
-
 The experimental particle implementation and its temporary playground integration were removed after benchmarking. The working tree returned to the retained triangle-based implementation.
 
 Flat typed-array TriangleSpatialHash optimization
@@ -891,14 +808,13 @@ The retained triangle broad phase was then optimized without changing its public
 
 The old implementation used:
 
-
 Map<number, number[]>
-+ per-bucket dynamic arrays
-+ bucket pooling
 
+per-bucket dynamic arrays
+
+bucket pooling
 
 An experimental FlatTriangleSpatialHash replaced the hot-path storage with reusable typed arrays and a flat linked-entry hash table:
-
 
 Int32Array  bucketHeads
 Uint32Array slotGenerations
@@ -906,11 +822,9 @@ Uint32Array entryTriangles
 Uint32Array entryKeys
 Int32Array  entryNext
 
-
 The experimental implementation was first compared against the Map implementation using the same deterministic REST and FOLDED inputs. Candidate sets matched exactly.
 
 Spatial-hash build A/B benchmark:
-
 
 REST
 Map   mean 1.1924 ms   p99 2.2304 ms
@@ -922,25 +836,21 @@ Map   mean 1.0176 ms   p99 2.0657 ms
 Flat  mean 0.3658 ms   p99 0.4814 ms
 Flat ≈ 2.78x faster
 
-
 An end-to-end detector harness then confirmed that the improvement survived candidate queries, AABB rejection, de-duplication and point-triangle testing.
 
 Correctness remained equivalent:
 
-
 REST
- tested = 3,456
- contacts = 0
- aabbRejected = 21,818
+tested = 3,456
+contacts = 0
+aabbRejected = 21,818
 
 FOLDED
- tested = 16,992
- contacts = 10,152
- aabbRejected = 25,040
-
+tested = 16,992
+contacts = 10,152
+aabbRejected = 25,040
 
 Confirmed end-to-end benchmark after integration:
-
 
 REST
 Map   mean 1.7336 ms   p99 2.7018 ms
@@ -952,9 +862,7 @@ Map   mean 2.1488 ms   p99 2.8409 ms
 Flat  mean 1.8534 ms   p99 2.1749 ms
 Flat ≈ 1.16x faster
 
-
 Decision:
-
 
 Flat typed-array storage
 ✓ equivalent candidate sets
@@ -965,13 +873,11 @@ Flat typed-array storage
 ✓ lower p99 latency
 → promoted to the official TriangleSpatialHash implementation
 
-
 The temporary FlatTriangleSpatialHash name and duplicate tests were removed. The public implementation remains TriangleSpatialHash; only its internal storage strategy changed.
 
 The permanent TriangleSpatialHash.bench.ts regression benchmark now measures the optimized production implementation directly.
 
 Final production hash-build baseline:
-
 
 REST
 mean  0.3462 ms
@@ -983,7 +889,6 @@ mean  0.3515 ms
 p99   0.4285 ms
 max   0.5150 ms
 
-
 These values are the current deterministic broad-phase regression baseline on the development machine.
 
 Performance-testing rule
@@ -992,23 +897,19 @@ From this point forward, performance implementation decisions should use determi
 
 Manual playground testing remains appropriate for:
 
-
 visual quality
 interaction feel
 stability
 fold behavior
 UX
 
-
 Deterministic benchmarks should be used for:
-
 
 algorithm A vs algorithm B
 optimization before vs after
 broad-phase changes
 solver hot-loop changes
 collision-performance regressions
-
 
 A performance optimization should only be retained when:
 
@@ -1022,11 +923,151 @@ multiple samples are measured;
 
 mean and tail behavior show a meaningful improvement.
 
-### Pointer UX
+Vertex-triangle collision response
+
+The first positional self-collision response stage is now implemented in VertexTriangleCollisionResolver.
+
+The resolver uses a PBD-style vertex-triangle projection. Given particle P, triangle vertices A/B/C, the closest point on the triangle and its barycentric coordinates, the correction is distributed according to inverse masses and barycentric contribution.
+
+Conceptually:
+
+denominator =
+    wP
+  + wA * alpha^2
+  + wB * beta^2
+  + wC * gamma^2
+
+correction =
+    penetration / denominator
+
+Pinned particles therefore participate naturally through inverseMass = 0.
+
+The isolated resolver is covered by deterministic tests including:
+
+movable particle against a pinned triangle
+
+fully dynamic particle + triangle response
+
+zero-distance fallback using the triangle normal
+
+no-op outside collision thickness
+
+final separation matching the configured collision thickness
+
+A permanent isolated benchmark was added in:
+
+packages/core/bench/VertexTriangleCollisionResolver.bench.ts
+
+Representative results on the current development machine:
+
+pinned triangle         ~0.0002 ms / contact
+fully dynamic triangle  ~0.0002 ms / contact
+fully dynamic response  ~1.30x the cost of the pinned-triangle case
+
+These microbenchmarks are useful as a response-cost baseline, but the end-to-end self-collision solver benchmark is the more important performance reference.
+
+Two-pass SelfCollisionSolver
+
+SelfCollisionSolver is now implemented as a separate renderer-independent core module.
+
+It deliberately does not use an optional callback inside SelfCollisionDetector.
+
+A temporary callback experiment was benchmarked and rejected because even an unused optional contact callback introduced measurable overhead in the FOLDED hot path, where more than ten thousand contacts are visited.
+
+The promoted solver architecture is two-pass:
+
+PASS 1 — detection
+
+TriangleSpatialHash
+        ↓
+padded AABB rejection
+        ↓
+point-triangle narrow phase
+        ↓
+store only:
+(particleIndex, triangleIndex)
+in reusable typed arrays
+
+
+PASS 2 — response
+
+stored pair
+        ↓
+recompute point-triangle data
+using current positions
+        ↓
+contact still penetrating?
+        ├── no  → stale contact
+        └── yes → VertexTriangleCollisionResolver
+
+Only particle/triangle index pairs are retained between the two passes. Closest-point and barycentric data are recalculated during response because earlier corrections may already have changed the geometry.
+
+The contact-pair buffers are reusable typed arrays and grow only when required. No per-contact object allocation is required.
+
+The deterministic REST / FOLDED benchmark preserves the same geometry and collision parameters used by SelfCollisionDetector:
+
+width:      4
+height:     3
+segments:   48 x 36
+thickness:  0.03
+cellSize:   0.10
+
+Detection correctness remains unchanged:
+
+REST
+tested:    3,456
+contacts:  0
+resolved:  0
+stale:     0
+
+FOLDED
+tested:    16,992
+contacts:  10,152
+resolved:   4,606
+stale:      5,546
+
+Therefore, in the deterministic FOLDED case:
+
+resolved contacts ≈ 45.4%
+stale contacts    ≈ 54.6%
+
+More than half of the initially detected contacts no longer require positional correction by the time they are revisited during PASS 2.
+
+Two consecutive benchmark runs produced:
+
+Run 1
+REST     mean 1.0785 ms
+FOLDED   mean 2.8956 ms
+
+Run 2
+REST     mean 1.0256 ms
+FOLDED   mean 2.8404 ms
+
+Practical current baseline:
+
+REST     ~1.05 ms
+FOLDED   ~2.87 ms
+
+The REST result remains close to the pre-response detector baseline, so the response stage adds little overhead when no contacts exist.
+
+Decision:
+
+two-pass SelfCollisionSolver
+✓ deterministic detection correctness preserved
+✓ reusable typed contact-pair buffers
+✓ no contact callback in the detector hot path
+✓ no per-contact object allocation
+✓ stale contacts automatically discarded
+✓ ~54.6% of FOLDED contacts avoid response
+✓ stable end-to-end benchmark
+→ promoted for integration testing
+
+The solver is not yet connected to the SoftSurface simulation pipeline. The next physics milestone is to integrate it and then evaluate ordering, stability, visual behavior and persistent-contact velocity handling.
+
+Pointer UX
 
 The playground distinguishes interaction based on where the primary pointer starts:
 
-```text
 
 LEFT DRAG on SoftSurface
 
@@ -1046,123 +1087,105 @@ MOUSE WHEEL
 
 zoom
 
-```
 
-This is achieved by letting `SoftSurfacePointerInteraction` raycast first.
+This is achieved by letting SoftSurfacePointerInteraction raycast first.
 
 If the mesh is hit, SoftSurface takes control of the pointer.
 
-If no mesh is hit, the event is left to Three.js `OrbitControls`.
+If no mesh is hit, the event is left to Three.js OrbitControls.
 
 This allows both material interaction and scene navigation using the primary mouse button.
 
----
-
-## Tests
+Tests
 
 Current automated coverage includes:
 
-### `@softsurface/core`
-
-* particle grid creation
-
-* initial particle positions
-
-* inverse masses
-
-* Verlet integration
-
-* damping
-
-* acceleration
-
-* pinned particles
-
-* distance constraints
-
-* grid constraint generation
-
-* generic constraint solving
-
-* stiffness normalization behavior
-
-* timestep-independent relaxation
-
-* dihedral bending constraint behavior
-
-* dihedral constraint generation from grid topology
-
-* distance / dihedral bend-model selection
-
-* SoftSurface API
-
-* material presets
-
-* fixed timestep behavior
-
-* weighted grab selection
-
-* weighted grab movement
-
-* grab falloff
-
-* pinned-particle grab behavior
-
-* grab release
-
-* grid triangle topology generation
-
-* triangle spatial hashing
-
-* spatial-hash bucket reuse
-
-* padded triangle AABB storage / containment
-
-* allocation-free point-triangle distance queries
-
-* self-collision detection
-
-* self-collision candidate de-duplication
-
-### `@softsurface/three`
-
-* direct sharing of SoftSurface position buffers
-
-* expected vertex count
-
-* indexed triangle generation
-
-* UV generation
-
-The latest development sequence has continued to pass the full workspace test and build commands after the dihedral integration and generic-constraint refactor.
-
-The suite is currently approximately:
-
-```text
-
 @softsurface/core
 
-66 tests passing
+particle grid creation
+
+initial particle positions
+
+inverse masses
+
+Verlet integration
+
+damping
+
+acceleration
+
+pinned particles
+
+distance constraints
+
+grid constraint generation
+
+generic constraint solving
+
+stiffness normalization behavior
+
+timestep-independent relaxation
+
+dihedral bending constraint behavior
+
+dihedral constraint generation from grid topology
+
+distance / dihedral bend-model selection
+
+SoftSurface API
+
+material presets
+
+fixed timestep behavior
+
+weighted grab selection
+
+weighted grab movement
+
+grab falloff
+
+pinned-particle grab behavior
+
+grab release
+
+grid triangle topology generation
+
+triangle spatial hashing
+
+spatial-hash bucket reuse
+
+padded triangle AABB storage / containment
+
+allocation-free point-triangle distance queries
+
+self-collision detection
+
+self-collision candidate de-duplication
+
+vertex-triangle collision response
+
+two-pass self-collision solving
 
 @softsurface/three
 
-4 tests passing
+direct sharing of SoftSurface position buffers
 
-Total
+expected vertex count
 
-70 tests passing
+indexed triangle generation
 
-```
+UV generation
+
+The latest development sequence has continued to pass the full workspace test and build commands after the dihedral integration and generic-constraint refactor.
+
+The full workspace test suite is passing after the collision-response and two-pass solver additions. Exact test counts should be refreshed from the next recorded pnpm test output rather than inferred here.
 
 TypeScript builds and the Vite production build are passing.
 
-`SoftSurfacePointerInteraction` is currently verified through the interactive playground; dedicated automated tests for pointer/raycast behavior have not yet been added.
+SoftSurfacePointerInteraction is currently verified through the interactive playground; dedicated automated tests for pointer/raycast behavior have not yet been added.
 
----
+Relevant milestones
 
-## Relevant milestones
-
-```text
 
 1ffe13d feat(core): add SoftSurface simulation API
 
@@ -1176,11 +1199,9 @@ c9851ae feat(three): add SoftSurface geometry adapter
 
 00efc74 feat(core): add material presets
 
-```
 
 Later milestones include:
 
-```text
 
 fix(core): normalize stiffness across solver iterations
 
@@ -1212,7 +1233,6 @@ feat(core): add self-collision geometry infrastructure
 
 feat(core): add self-collision detection
 
-```
 
 The padded-AABB pre-filter integration was benchmarked and committed.
 
@@ -1224,38 +1244,35 @@ The old Map-backed triangle spatial hash was then replaced internally by the ben
 
 Relevant later commit subjects include:
 
-
 bench(core): add deterministic triangle spatial hash benchmark
 perf(core): replace triangle spatial hash with flat storage
-
+bench(core): add deterministic self-collision detector benchmark
+feat(core): add vertex-triangle collision resolver
+feat(core): add two-pass self-collision solver
 
 The temporary Map-vs-flat detector benchmark was removed after the decision. TriangleSpatialHash.bench.ts remains as the production regression benchmark.
 
 Commit hashes for later milestones should be added when needed.
 
----
+Current observations
 
----
-
-## Current observations
-
-### Material differentiation
+Material differentiation
 
 Stiffness normalization made the material presets visibly more distinct.
 
 The most noticeable characteristics remain:
 
-* stretch
+stretch
 
-* bend
+bend
 
-* damping
+damping
 
-* bounce / energy retention
+bounce / energy retention
 
 The addition of dihedral bending substantially changed fold quality, so the existing preset bend values now need a new tuning pass before they should be considered representative.
 
-### Interaction and fold quality
+Interaction and fold quality
 
 Weighted grabbing continues to provide natural regional deformation.
 
@@ -1263,53 +1280,58 @@ The previous distance-based bending produced visible square/grid artifacts in st
 
 Switching to dihedral bending produced a major visual improvement. With approximately:
 
-```text
 
 bendStiffness: 0.3
 
 relaxation: 0.5
 
-```
 
 and the current 48 x 36 test surface, the grid artifacts are close to disappearing while the material remains highly interactive.
 
 The quality remains strong even with a single solver iteration in the current playground scenario.
 
-### Self-collision status
+Self-collision status
 
-The original self-intersection problem remains physically unresolved because SoftSurface still has no self-collision response.
+The original self-intersection problem is not yet resolved in the live SoftSurface pipeline because the new collision response has not yet been integrated there. The response infrastructure itself now exists and has been tested and benchmarked independently.
 
 The detection infrastructure now includes:
 
-* stable grid triangle indices via `GridTopology`
+stable grid triangle indices via GridTopology
 
-* broad-phase triangle spatial hashing via the flat typed-array `TriangleSpatialHash` implementation
+broad-phase triangle spatial hashing via the flat typed-array TriangleSpatialHash implementation
 
-* flat typed-array triangle spatial hash with reusable bucket heads / entry buffers / generation stamps to reduce Map, dynamic-array and GC overhead
+flat typed-array triangle spatial hash with reusable bucket heads / entry buffers / generation stamps to reduce Map, dynamic-array and GC overhead
 
-* allocation-free point-to-triangle distance / closest-point testing
+allocation-free point-to-triangle distance / closest-point testing
 
-* reusable `PointTriangleResult`
+reusable PointTriangleResult
 
-* candidate de-duplication using a reusable `Uint32Array` visit-stamp buffer
+candidate de-duplication using a reusable Uint32Array visit-stamp buffer
 
-* reusable `SelfCollisionStats`
+reusable SelfCollisionStats
 
-* optional detector integration in `SoftSurface`
+isolated VertexTriangleCollisionResolver
 
-* playground controls for enable / thickness / cell size
+two-pass SelfCollisionSolver
 
-* Performance HUD counters for candidates / tested pairs / contacts
+reusable typed particle/triangle contact-pair buffers
 
-* copyable benchmark reports
+deterministic response benchmarks
 
-* temporary timing instrumentation for hash build / narrow phase / total detector time
+optional detector integration in SoftSurface
 
-* cached padded triangle AABBs and an allocation-free `containsPoint()` test
+playground controls for enable / thickness / cell size
+
+Performance HUD counters for candidates / tested pairs / contacts
+
+copyable benchmark reports
+
+temporary timing instrumentation for hash build / narrow phase / total detector time
+
+cached padded triangle AABBs and an allocation-free containsPoint() test
 
 Current detection ordering:
 
-```text
 
 Verlet integration
 ↓
@@ -1323,42 +1345,34 @@ self-collision detection
 ↓
 statistics only
 
-```
 
 No vertices are currently moved by self-collision.
 
 At rest, the reference surface reports:
 
-```text
 
 Contacts = 0
 
-```
 
-with `thickness: 0.03`, which is an important correctness signal: the flat surface is not being interpreted as self-colliding.
+with thickness: 0.03, which is an important correctness signal: the flat surface is not being interpreted as self-colliding.
 
 During strong folding / penetration, hundreds of contacts can be detected, showing that the detector is observing the geometric overlap problem.
 
-Detection performance has been reduced substantially before collision response is added. The optimized deterministic detector harness measures approximately `1.07 ms` in REST and `1.85 ms` in the deterministic FOLDED case on the current development machine. Collision response will add new cost, so these values should be treated as the pre-response baseline rather than a final budget.
+Detection performance has been reduced substantially before collision response is added. The optimized deterministic detector harness measures approximately 1.07 ms in REST and 1.85 ms in the deterministic FOLDED case on the current development machine. Collision response will add new cost, so these values should be treated as the pre-response baseline rather than a final budget.
 
 The exact padded-AABB pre-filter is now integrated into SelfCollisionDetector.
 
 On the 48 x 36 reference resting scene, the pre-filter reduced expensive point-triangle tests from approximately:
 
-
 25,402
 →
 3,456
 
-
 while keeping:
-
 
 Contacts = 0
 
-
 Representative detector timing improved from approximately:
-
 
 Narrow phase
 1.60 ms
@@ -1370,145 +1384,152 @@ Detector total
 →
 ~2.00 ms
 
-
 The AABB pre-filter made the broad phase the next dominant target. A particle-based inverted broad phase was rejected by deterministic benchmarking, while a flat typed-array rewrite of the retained triangle spatial hash produced a large and repeatable improvement and is now the production implementation.
 
 Current production hash-build baseline:
 
-
 REST    mean ~0.346 ms
 FOLDED  mean ~0.352 ms
 
-
 Current pre-response detector baseline from the deterministic A/B harness:
-
 
 REST    mean ~1.073 ms
 FOLDED  mean ~1.853 ms
 
+Still required before self-collision can be considered fully integrated:
 
-Still required before self-collision can be considered physically implemented:
+connect SelfCollisionSolver to the SoftSurface simulation pipeline
 
-* establish a permanent production SelfCollisionDetector regression benchmark using the real detector directly
+evaluate solver / relaxation / grab / collision ordering
 
-* add topology-aware exclusions if materially useful
+evaluate persistent-contact behavior and the interaction with Verlet velocity / previousPositions
 
-* implement vertex-triangle positional collision response
+add topology-aware exclusions if materially useful
 
-* revisit solver / grab / collision ordering after response exists
+visually test folding, sticking, jitter and stability in the playground
 
-* later evaluate edge-edge collision cases
+later evaluate edge-edge collision cases
 
-* investigate tunneling / fast dragging and possible CCD or movement limiting
+investigate tunneling / fast dragging and possible CCD or movement limiting
 
-### Dihedral stability
+Dihedral stability
 
-Very high dihedral bend stiffness can become numerically unstable. In manual testing, `bendStiffness: 1` caused the simulation to explode.
+Very high dihedral bend stiffness can become numerically unstable. In manual testing, bendStiffness: 1 caused the simulation to explode.
 
 This should be treated as a stability issue to investigate separately rather than as normal material behavior.
 
-### Current visual gap vs HoloCloth
+Current visual gap vs HoloCloth
 
 The visual gap has narrowed substantially after adding dihedral bending and relaxation.
 
 The main remaining physical gaps now include:
 
-* self-collision
+self-collision
 
-* further material tuning
+further material tuning
 
-* improved collision behavior
+improved collision behavior
 
-* stability under extreme parameters
+stability under extreme parameters
 
-* future wrinkle/detail refinements
+future wrinkle/detail refinements
 
 Lighting/material presentation can still be improved later, but current development should continue to prioritize physical shape, motion and robustness.
 
----
+Next milestone
 
-## Next milestone
+Integrate the two-pass SelfCollisionSolver into SoftSurface
 
-### Freeze production detector baseline, then implement vertex-triangle collision response
+The collision-response math and the two-pass solver are now implemented, tested and benchmarked independently.
 
-The triangle broad-phase optimization phase is now complete enough to move forward.
+Current response architecture:
 
-The retained TriangleSpatialHash has been rewritten internally with flat typed-array storage and promoted after deterministic correctness + performance gates.
+SelfCollisionDetector
+    ✓ retained as detection-only regression reference
 
-Current permanent broad-phase benchmark:
+VertexTriangleCollisionResolver
+    ✓ isolated positional response
+    ✓ inverse-mass / barycentric correction
+    ✓ deterministic tests
+    ✓ isolated benchmark
 
-
-TriangleSpatialHash.bench.ts
-
-REST
-mean 0.3462 ms
-p99  0.4145 ms
-
-FOLDED
-mean 0.3515 ms
-p99  0.4285 ms
-
-
-The temporary end-to-end A/B harness also established the current detector reference:
-
-
-REST
- tested: 3,456
- contacts: 0
- mean: ~1.073 ms
-
-FOLDED
- tested: 16,992
- contacts: 10,152
- mean: ~1.853 ms
-
+SelfCollisionSolver
+    ✓ two-pass detection + response
+    ✓ reusable typed contact-pair buffers
+    ✓ deterministic REST / FOLDED benchmark
+    ✓ stale-contact elimination
 
 The next development session should restart here:
 
+1. Confirm the working tree is clean after the SelfCollisionSolver commit and PROJECT_STATE.md update.
 
-1. Confirm `git status --short` is clean except for the intended PROJECT_STATE.md update.
+2. Integrate SelfCollisionSolver into SoftSurface without changing unrelated public APIs.
 
-2. Create:
-   packages/core/bench/SelfCollisionDetector.bench.ts
+3. Preserve the current detector benchmark as the pre-response regression baseline.
 
-3. Benchmark the real production `SelfCollisionDetector` directly — no Map-vs-flat switch and no temporary comparison harness.
+4. Decide and test initial pipeline ordering.
 
-4. Reuse the deterministic REST and FOLDED scenarios:
-   - 48 x 36 surface
-   - thickness 0.03
-   - cellSize 0.10
-   - REST expected contacts = 0
-   - FOLDED expected tested = 16,992 and contacts = 10,152 if detector behavior is unchanged
+   Current pipeline:
+   Verlet
+       ↓
+   constraints
+       ↓
+   relaxation
+       ↓
+   grab
+       ↓
+   SelfCollisionDetector
+       ↓
+   stats only
 
-5. Record mean / min / max / p99 after warmup and keep this file as the permanent end-to-end collision-detection regression benchmark.
+   First integration candidate:
+   Verlet
+       ↓
+   constraints
+       ↓
+   relaxation
+       ↓
+   grab
+       ↓
+   SelfCollisionSolver
+       ↓
+   corrected positions
 
-6. Run `pnpm test` and `pnpm build`, then commit the benchmark separately.
+5. Run automated tests and build before playground evaluation.
 
-7. Start vertex-triangle positional collision response.
+6. Use the playground only for:
+   - visual fold quality
+   - sticking / separation behavior
+   - jitter
+   - stability
+   - grab interaction
 
+7. Use deterministic benchmarks for any performance or algorithmic decision.
 
-Collision-response implementation should continue to follow the established performance rule: one meaningful change at a time, correctness before timing, deterministic benchmarks for performance decisions, and manual playground testing for visual behavior/stability.
+8. After integration, measure:
+   - physics avg / max
+   - collision total
+   - resolvedContacts
+   - staleContacts
+   - behavior under persistent folds
 
-The likely response-stage questions are:
+9. Revisit `previousPositions` handling only if integrated collision behavior shows repeated penetration, excessive energy retention, jitter or sticking.
 
+Important open questions after integration:
 
-how to distribute positional correction using particle inverse masses / barycentric weights
-how much correction to apply per substep
-how to preserve Verlet velocity when positions are corrected
-whether topology-near triangles need exclusions before response
-where collision response belongs relative to constraints, relaxation and grab
+where collision response belongs relative to constraints / relaxation / grab
+whether collision correction should modify previousPositions exactly as current resolver does
+whether inward normal velocity should later be removed explicitly
+whether topology-near triangles require exclusion
+whether collision solving needs iteration / interleaving with structural constraints
 how to prevent oscillation / sticking during persistent contact
 
-
-Do not resume broad-phase experimentation unless the permanent detector benchmark or collision-response work exposes a new measured bottleneck.
+Do not resume broad-phase experimentation unless integrated solver measurements expose a new bottleneck.
 
 Performance remains a continuous design constraint rather than an end-stage optimization task.
 
----
+Planned roadmap
 
-## Planned roadmap
-
-```text
 
 [x] Particle grid
 
@@ -1586,11 +1607,17 @@ Performance remains a continuous design constraint rather than an end-stage opti
 
 [x] Integrate optimized TriangleSpatialHash into SelfCollisionDetector
 
-[ ] Permanent SelfCollisionDetector regression benchmark
+[x] Permanent SelfCollisionDetector regression benchmark
 
 [ ] Self-collision topology exclusions
 
-[ ] Vertex-triangle self-collision response
+[x] Vertex-triangle self-collision response
+
+[x] Two-pass SelfCollisionSolver
+
+[x] Deterministic SelfCollisionSolver regression benchmark
+
+[ ] Integrate SelfCollisionSolver into SoftSurface
 
 [ ] Dihedral extreme-stiffness stability
 
@@ -1614,9 +1641,8 @@ Performance remains a continuous design constraint rather than an end-stage opti
 
 [ ] npm publishing
 
-```
 
-## long-term deformable geometry goals
+long-term deformable geometry goals
 
 [ ] Arbitrary triangle-mesh topology
 
@@ -1628,15 +1654,12 @@ Performance remains a continuous design constraint rather than an end-stage opti
 
 [ ] Volumetric / tetrahedral soft bodies — research
 
----
+Core design rule
 
-## Core design rule
-
-`@softsurface/core` must remain renderer agnostic.
+@softsurface/core must remain renderer agnostic.
 
 It must not depend on:
 
-```text
 
 Three.js
 
@@ -1648,19 +1671,16 @@ WebGL
 
 DOM APIs
 
-```
 
 Renderer-specific behavior belongs in adapters such as:
 
-```text
 
 @softsurface/three
 
 @softsurface/react-three-fiber
 
-```
 
-Three.js may determine **where** an interaction occurs, but the physics engine must determine **how the surface reacts**.
+Three.js may determine where an interaction occurs, but the physics engine must determine how the surface reacts.
 
 This separation is considered a fundamental architectural constraint of SoftSurface.
 
@@ -1668,15 +1688,14 @@ This separation is considered a fundamental architectural constraint of SoftSurf
 
 
 
-# Long-term direction — General deformable geometry
+Long-term direction — General deformable geometry
 
 SoftSurface should not be architecturally limited to rectangular cloth simulation.
 
-The current particle grid is intentionally the simplest topology for developing and validating the physics engine, but a possible long-term direction is support for **arbitrary deformable 3D geometry**.
+The current particle grid is intentionally the simplest topology for developing and validating the physics engine, but a possible long-term direction is support for arbitrary deformable 3D geometry.
 
 Potential inputs include:
 
-```text
 
 PlaneGeometry
 
@@ -1688,29 +1707,23 @@ arbitrary triangle meshes
 
 GLTF / product geometry
 
-```
 
 A future topology abstraction could evolve from:
 
-```text
 
 ParticleGrid
 
-```
 
 toward a more general representation such as:
 
-```text
 
 ParticleMesh / SurfaceTopology
 
-```
 
-where particles and constraints are derived from mesh vertices, edges and connectivity rather than from a regular `(x, y)` grid.
+where particles and constraints are derived from mesh vertices, edges and connectivity rather than from a regular (x, y) grid.
 
 Possible evolution:
 
-```text
 
 Particle system
 
@@ -1732,9 +1745,8 @@ Particle system
 
              └── GLTF models
 
-```
 
-## Surface deformation vs soft bodies
+Surface deformation vs soft bodies
 
 Arbitrary surface deformation and true volumetric soft-body simulation are separate capabilities.
 
@@ -1742,7 +1754,6 @@ A closed triangle mesh using only surface constraints can deform, but may collap
 
 Future closed-body support may therefore introduce:
 
-```text
 
 surface constraints
 
@@ -1758,41 +1769,39 @@ volume preservation
 
 collision constraints
 
-```
 
 A more advanced future implementation could optionally investigate XPBD and tetrahedral volumetric meshes.
 
-This is considered a **possible expansion path**, not a requirement for the current cloth/surface MVP.
+This is considered a possible expansion path, not a requirement for the current cloth/surface MVP.
 
-## Potential applications
+Potential applications
 
 This direction could enable:
 
-* interactive 3D product presentation
+interactive 3D product presentation
 
-* material previews
+material previews
 
-* footwear and sole deformation
+footwear and sole deformation
 
-* cushions, mattresses and foam products
+cushions, mattresses and foam products
 
-* rubber and silicone objects
+rubber and silicone objects
 
-* flexible packaging
+flexible packaging
 
-* interactive GLTF models
+interactive GLTF models
 
-* creative 3D experiences
+creative 3D experiences
 
-* game objects and environmental soft bodies
+game objects and environmental soft bodies
 
-## Product positioning
+Product positioning
 
 SoftSurface does not currently aim to replace engineering-grade FEM or scientific material simulation.
 
 The intended opportunity is a lightweight layer between purely visual vertex deformation and heavyweight general-purpose physics engines:
 
-```text
 
 visual deformation
 
@@ -1804,20 +1813,19 @@ SoftSurface
 
 general soft-body / engineering simulation
 
-```
 
 The emphasis should remain on:
 
-* browser-first usage
+browser-first usage
 
-* simple APIs
+simple APIs
 
-* renderer independence
+renderer independence
 
-* real-time interaction
+real-time interaction
 
-* visually plausible material behavior
+visually plausible material behavior
 
-* creative-web and product-experience use cases
+creative-web and product-experience use cases
 
 Architectural decisions made during the current MVP should avoid unnecessarily preventing this future evolution.
