@@ -256,6 +256,19 @@ let recordedScenario: RecordedScenario | null = null;
 
 let scenarioReplay: ScenarioReplay | null = null;
 
+const replayCollisionTelemetry: Array<{
+  step: number;
+  candidatePairs: number;
+  testedPairs: number;
+  contacts: number;
+  resolvedContacts: number;
+  staleContacts: number;
+  hashBuildMs: number;
+  detectionMs: number;
+  responseMs: number;
+  totalMs: number;
+}> = [];
+
 /**
  * Total number of physics substeps executed
  * by the current playground session.
@@ -947,6 +960,8 @@ replayRecordingButton.addEventListener("click", () => {
 
   oldGeometry.dispose();
 
+  replayCollisionTelemetry.length = 0;
+
   /**
    * ScenarioReplay restores:
    *
@@ -1083,7 +1098,26 @@ function animate() {
      * Render frame rate therefore cannot change
      * the physics sequence being reproduced.
      */
+    const replayStep = scenarioReplay.stepIndex;
+
     executedSubsteps = scenarioReplay.step();
+
+    const collisionStats = surface.selfCollisionSolverStats;
+
+    if (collisionStats) {
+      replayCollisionTelemetry.push({
+        step: replayStep,
+        candidatePairs: collisionStats.candidatePairs,
+        testedPairs: collisionStats.testedPairs,
+        contacts: collisionStats.contacts,
+        resolvedContacts: collisionStats.resolvedContacts,
+        staleContacts: collisionStats.staleContacts,
+        hashBuildMs: collisionStats.hashBuildMs,
+        detectionMs: collisionStats.detectionMs,
+        responseMs: collisionStats.responseMs,
+        totalMs: collisionStats.totalMs,
+      });
+    }
 
     /**
      * The last recorded event is the release.
@@ -1091,6 +1125,7 @@ function animate() {
      * the surface returns to live simulation.
      */
     if (scenarioReplay.hasProcessedAllEvents) {
+      console.table(replayCollisionTelemetry);
       scenarioReplay = null;
 
       recordingStatus.textContent = "Replay complete";

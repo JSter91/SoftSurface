@@ -35,7 +35,10 @@ import { createGridTriangleIndices } from "./GridTopology.js";
 
 import type { SelfCollisionStats } from "./SelfCollisionDetector.js";
 
-import { SelfCollisionSolver } from "./SelfCollisionSolver.js";
+import {
+  SelfCollisionSolver,
+  type SelfCollisionSolverStats,
+} from "./SelfCollisionSolver.js";
 
 export interface SoftSurfaceOptions
   extends ParticleGridOptions, GridConstraintOptions {
@@ -83,6 +86,8 @@ export class SoftSurface {
     narrowPhaseMs: 0,
     totalMs: 0,
   };
+
+  private selfCollisionSolverStatsValue: SelfCollisionSolverStats | null = null;
 
   private hasSelfCollisionStats = false;
   constructor(options: SoftSurfaceOptions) {
@@ -191,6 +196,11 @@ export class SoftSurface {
 
     return this.selfCollisionStatsBuffer;
   }
+
+  get selfCollisionSolverStats(): SelfCollisionSolverStats | null {
+    return this.selfCollisionSolverStatsValue;
+  }
+
   grab(point: GrabPoint, options?: GrabOptions): number {
     return this.grabInteraction.grab(point, options);
   }
@@ -240,6 +250,8 @@ export class SoftSurface {
         this.grid.previousPositions,
         this.grid.inverseMasses,
       );
+
+      this.selfCollisionSolverStatsValue = solverStats;
 
       const stats = this.selfCollisionStatsBuffer;
 
