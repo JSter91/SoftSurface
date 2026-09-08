@@ -191,6 +191,79 @@ describe("resolveVertexTriangleCollision", () => {
     expect(positions[11]).toBeCloseTo(0.05);
   });
 
+  it("preserves the previous triangle side after crossing the plane", () => {
+    const positions = new Float32Array([
+      // A
+      0, 0, 0,
+
+      // B
+      1, 0, 0,
+
+      // C
+      0, 1, 0,
+
+      // P - current position, after crossing
+      0.25, 0.25, -0.01,
+    ]);
+
+    const previousPositions = new Float32Array([
+      // A
+      0, 0, 0,
+
+      // B
+      1, 0, 0,
+
+      // C
+      0, 1, 0,
+
+      // P - previous position, before crossing
+      0.25, 0.25, 0.01,
+    ]);
+
+    /**
+     * Keep the triangle pinned so this test isolates
+     * the collision direction chosen for the particle.
+     */
+    const inverseMasses = new Float32Array([0, 0, 0, 1]);
+
+    const contact: PointTriangleResult = {
+      distanceSquared: 0.01 * 0.01,
+
+      closestX: 0.25,
+      closestY: 0.25,
+      closestZ: 0,
+
+      barycentricA: 0.5,
+      barycentricB: 0.25,
+      barycentricC: 0.25,
+    };
+
+    const resolved = resolveVertexTriangleCollision(
+      positions,
+      previousPositions,
+      inverseMasses,
+
+      3,
+
+      0,
+      1,
+      2,
+
+      0.05,
+
+      contact,
+    );
+
+    expect(resolved).toBe(true);
+
+    /**
+     * The particle came from +Z, therefore collision
+     * response must restore it to the +Z side rather
+     * than reinforcing the crossing on -Z.
+     */
+    expect(positions[11]).toBeCloseTo(0.05);
+  });
+
   it("does nothing when the contact is outside collision thickness", () => {
     const positions = new Float32Array([
       0, 0, 0, 1, 0, 0, 0, 1, 0,

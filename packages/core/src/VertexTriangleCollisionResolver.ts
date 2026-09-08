@@ -1,9 +1,8 @@
-import type {
-  PointTriangleResult,
-} from "./PointTriangleDistance.js";
+import type { PointTriangleResult } from "./PointTriangleDistance.js";
 
 const NORMAL_EPSILON_SQUARED = 1e-12;
 const MASS_EPSILON = 1e-12;
+const SIDE_EPSILON = 1e-6;
 
 /**
  * Projects a vertex-triangle contact so that the vertex
@@ -40,8 +39,7 @@ export function resolveVertexTriangleCollision(
     return false;
   }
 
-  const distanceSquared =
-    contact.distanceSquared;
+  const distanceSquared = contact.distanceSquared;
 
   if (
     !Number.isFinite(distanceSquared) ||
@@ -50,37 +48,29 @@ export function resolveVertexTriangleCollision(
     return false;
   }
 
-  const particleOffset =
-    particle * 3;
+  const particleOffset = particle * 3;
 
   const aOffset = a * 3;
   const bOffset = b * 3;
   const cOffset = c * 3;
 
-  const px =
-    positions[particleOffset];
+  const px = positions[particleOffset];
 
-  const py =
-    positions[particleOffset + 1];
+  const py = positions[particleOffset + 1];
 
-  const pz =
-    positions[particleOffset + 2];
+  const pz = positions[particleOffset + 2];
 
-  let nx =
-    px - contact.closestX;
+  let nx = px - contact.closestX;
 
-  let ny =
-    py - contact.closestY;
+  let ny = py - contact.closestY;
 
-  let nz =
-    pz - contact.closestZ;
+  let nz = pz - contact.closestZ;
 
-  let normalLengthSquared =
-    nx * nx +
-    ny * ny +
-    nz * nz;
+  let normalLengthSquared = nx * nx + ny * ny + nz * nz;
 
   let distance: number;
+
+  let crossedPlane = false;
 
   /**
    * Normally the contact normal points from the closest
@@ -90,78 +80,43 @@ export function resolveVertexTriangleCollision(
    * the triangle geometric normal as a deterministic
    * fallback.
    */
-  if (
-    normalLengthSquared >
-    NORMAL_EPSILON_SQUARED
-  ) {
-    distance =
-      Math.sqrt(
-        normalLengthSquared,
-      );
+  if (normalLengthSquared > NORMAL_EPSILON_SQUARED) {
+    distance = Math.sqrt(normalLengthSquared);
 
-    const inverseDistance =
-      1 / distance;
+    const inverseDistance = 1 / distance;
 
     nx *= inverseDistance;
     ny *= inverseDistance;
     nz *= inverseDistance;
   } else {
-    const abX =
-      positions[bOffset] -
-      positions[aOffset];
+    const abX = positions[bOffset] - positions[aOffset];
 
-    const abY =
-      positions[bOffset + 1] -
-      positions[aOffset + 1];
+    const abY = positions[bOffset + 1] - positions[aOffset + 1];
 
-    const abZ =
-      positions[bOffset + 2] -
-      positions[aOffset + 2];
+    const abZ = positions[bOffset + 2] - positions[aOffset + 2];
 
-    const acX =
-      positions[cOffset] -
-      positions[aOffset];
+    const acX = positions[cOffset] - positions[aOffset];
 
-    const acY =
-      positions[cOffset + 1] -
-      positions[aOffset + 1];
+    const acY = positions[cOffset + 1] - positions[aOffset + 1];
 
-    const acZ =
-      positions[cOffset + 2] -
-      positions[aOffset + 2];
+    const acZ = positions[cOffset + 2] - positions[aOffset + 2];
 
-    nx =
-      abY * acZ -
-      abZ * acY;
+    nx = abY * acZ - abZ * acY;
 
-    ny =
-      abZ * acX -
-      abX * acZ;
+    ny = abZ * acX - abX * acZ;
 
-    nz =
-      abX * acY -
-      abY * acX;
+    nz = abX * acY - abY * acX;
 
-    normalLengthSquared =
-      nx * nx +
-      ny * ny +
-      nz * nz;
+    normalLengthSquared = nx * nx + ny * ny + nz * nz;
 
     /**
      * A degenerate triangle has no usable normal.
      */
-    if (
-      normalLengthSquared <=
-      NORMAL_EPSILON_SQUARED
-    ) {
+    if (normalLengthSquared <= NORMAL_EPSILON_SQUARED) {
       return false;
     }
 
-    const inverseNormalLength =
-      1 /
-      Math.sqrt(
-        normalLengthSquared,
-      );
+    const inverseNormalLength = 1 / Math.sqrt(normalLengthSquared);
 
     nx *= inverseNormalLength;
     ny *= inverseNormalLength;
@@ -170,26 +125,152 @@ export function resolveVertexTriangleCollision(
     distance = 0;
   }
 
-  const barycentricA =
-    contact.barycentricA;
+  /**
+   * Preserve collision sidedness across a discrete
+   * triangle-plane crossing.
+   *
+   * The ordinary closest-point normal is correct while
+   * the particle remains on the same side of the surface.
+   *
+   * Once the particle crosses the triangle plane, however,
+   * that normal points toward the new (wrong) side and the
+   * collision response would reinforce the crossing.
+   *
+   * Compare the signed particle/triangle distance between
+   * previous and current states. If the sign changed,
+   * restore the particle toward its previous side.
+   */
 
-  const barycentricB =
-    contact.barycentricB;
+  // Previous triangle normal.
+  const previousAbX = previousPositions[bOffset] - previousPositions[aOffset];
 
-  const barycentricC =
-    contact.barycentricC;
+  const previousAbY =
+    previousPositions[bOffset + 1] - previousPositions[aOffset + 1];
 
-  const particleWeight =
-    inverseMasses[particle];
+  const previousAbZ =
+    previousPositions[bOffset + 2] - previousPositions[aOffset + 2];
 
-  const aWeight =
-    inverseMasses[a];
+  const previousAcX = previousPositions[cOffset] - previousPositions[aOffset];
 
-  const bWeight =
-    inverseMasses[b];
+  const previousAcY =
+    previousPositions[cOffset + 1] - previousPositions[aOffset + 1];
 
-  const cWeight =
-    inverseMasses[c];
+  const previousAcZ =
+    previousPositions[cOffset + 2] - previousPositions[aOffset + 2];
+
+  const previousNormalX = previousAbY * previousAcZ - previousAbZ * previousAcY;
+
+  const previousNormalY = previousAbZ * previousAcX - previousAbX * previousAcZ;
+
+  const previousNormalZ = previousAbX * previousAcY - previousAbY * previousAcX;
+
+  const previousNormalLengthSquared =
+    previousNormalX * previousNormalX +
+    previousNormalY * previousNormalY +
+    previousNormalZ * previousNormalZ;
+
+  // Current triangle normal.
+  const currentAbX = positions[bOffset] - positions[aOffset];
+
+  const currentAbY = positions[bOffset + 1] - positions[aOffset + 1];
+
+  const currentAbZ = positions[bOffset + 2] - positions[aOffset + 2];
+
+  const currentAcX = positions[cOffset] - positions[aOffset];
+
+  const currentAcY = positions[cOffset + 1] - positions[aOffset + 1];
+
+  const currentAcZ = positions[cOffset + 2] - positions[aOffset + 2];
+
+  let currentNormalX = currentAbY * currentAcZ - currentAbZ * currentAcY;
+
+  let currentNormalY = currentAbZ * currentAcX - currentAbX * currentAcZ;
+
+  let currentNormalZ = currentAbX * currentAcY - currentAbY * currentAcX;
+
+  const currentNormalLengthSquared =
+    currentNormalX * currentNormalX +
+    currentNormalY * currentNormalY +
+    currentNormalZ * currentNormalZ;
+
+  if (
+    previousNormalLengthSquared > NORMAL_EPSILON_SQUARED &&
+    currentNormalLengthSquared > NORMAL_EPSILON_SQUARED
+  ) {
+    /**
+     * Keep current triangle orientation consistent
+     * with the previous triangle orientation.
+     */
+    const normalAlignment =
+      previousNormalX * currentNormalX +
+      previousNormalY * currentNormalY +
+      previousNormalZ * currentNormalZ;
+
+    if (normalAlignment < 0) {
+      currentNormalX = -currentNormalX;
+      currentNormalY = -currentNormalY;
+      currentNormalZ = -currentNormalZ;
+    }
+
+    const inversePreviousNormalLength =
+      1 / Math.sqrt(previousNormalLengthSquared);
+
+    const inverseCurrentNormalLength =
+      1 / Math.sqrt(currentNormalLengthSquared);
+
+    const previousParticleX = previousPositions[particleOffset];
+
+    const previousParticleY = previousPositions[particleOffset + 1];
+
+    const previousParticleZ = previousPositions[particleOffset + 2];
+
+    const previousSignedDistance =
+      ((previousParticleX - previousPositions[aOffset]) * previousNormalX +
+        (previousParticleY - previousPositions[aOffset + 1]) * previousNormalY +
+        (previousParticleZ - previousPositions[aOffset + 2]) *
+          previousNormalZ) *
+      inversePreviousNormalLength;
+
+    const currentSignedDistance =
+      ((px - positions[aOffset]) * currentNormalX +
+        (py - positions[aOffset + 1]) * currentNormalY +
+        (pz - positions[aOffset + 2]) * currentNormalZ) *
+      inverseCurrentNormalLength;
+
+    crossedPlane =
+      (previousSignedDistance > SIDE_EPSILON &&
+        currentSignedDistance < -SIDE_EPSILON) ||
+      (previousSignedDistance < -SIDE_EPSILON &&
+        currentSignedDistance > SIDE_EPSILON);
+
+    if (crossedPlane) {
+      /**
+       * Restore the direction associated with the
+       * previous side of the triangle.
+       */
+      const previousSide = previousSignedDistance > 0 ? 1 : -1;
+
+      nx = currentNormalX * inverseCurrentNormalLength * previousSide;
+
+      ny = currentNormalY * inverseCurrentNormalLength * previousSide;
+
+      nz = currentNormalZ * inverseCurrentNormalLength * previousSide;
+    }
+  }
+
+  const barycentricA = contact.barycentricA;
+
+  const barycentricB = contact.barycentricB;
+
+  const barycentricC = contact.barycentricC;
+
+  const particleWeight = inverseMasses[particle];
+
+  const aWeight = inverseMasses[a];
+
+  const bWeight = inverseMasses[b];
+
+  const cWeight = inverseMasses[c];
 
   /**
    * PBD denominator:
@@ -201,51 +282,30 @@ export function resolveVertexTriangleCollision(
    */
   const denominator =
     particleWeight +
-    aWeight *
-      barycentricA *
-      barycentricA +
-    bWeight *
-      barycentricB *
-      barycentricB +
-    cWeight *
-      barycentricC *
-      barycentricC;
+    aWeight * barycentricA * barycentricA +
+    bWeight * barycentricB * barycentricB +
+    cWeight * barycentricC * barycentricC;
 
-  if (
-    denominator <=
-    MASS_EPSILON
-  ) {
+  if (denominator <= MASS_EPSILON) {
     return false;
   }
 
-  const penetration =
-    thickness - distance;
-
+  const penetration = crossedPlane
+    ? thickness + distance
+    : thickness - distance;   
   if (penetration <= 0) {
     return false;
   }
 
-  const correctionScale =
-    penetration / denominator;
+  const correctionScale = penetration / denominator;
 
-  const particleScale =
-    particleWeight *
-    correctionScale;
+  const particleScale = particleWeight * correctionScale;
 
-  const aScale =
-    -aWeight *
-    barycentricA *
-    correctionScale;
+  const aScale = -aWeight * barycentricA * correctionScale;
 
-  const bScale =
-    -bWeight *
-    barycentricB *
-    correctionScale;
+  const bScale = -bWeight * barycentricB * correctionScale;
 
-  const cScale =
-    -cWeight *
-    barycentricC *
-    correctionScale;
+  const cScale = -cWeight * barycentricC * correctionScale;
 
   applyCorrection(
     positions,
