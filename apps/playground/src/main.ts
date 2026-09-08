@@ -90,13 +90,37 @@ scene.add(directionalLight);
 /**
  * Material
  */
+const frontColor = new THREE.Color(0x4f8ef7);
+const backColor = new THREE.Color(0xf97316);
+
 const material = new THREE.MeshStandardMaterial({
-  color: 0xd9d9d9,
+  color: 0xffffff,
   roughness: 0.65,
   metalness: 0.05,
   side: THREE.DoubleSide,
 });
 
+material.onBeforeCompile = (shader) => {
+  shader.uniforms.frontColor = { value: frontColor };
+  shader.uniforms.backColor = { value: backColor };
+
+  shader.fragmentShader = shader.fragmentShader.replace(
+    "#include <color_fragment>",
+    `
+      #include <color_fragment>
+
+      diffuseColor.rgb *= gl_FrontFacing
+        ? frontColor
+        : backColor;
+    `,
+  );
+
+  shader.fragmentShader =
+    `
+    uniform vec3 frontColor;
+    uniform vec3 backColor;
+  ` + shader.fragmentShader;
+};
 type BendModel = "distance" | "dihedral";
 
 interface PlaygroundSettings {
