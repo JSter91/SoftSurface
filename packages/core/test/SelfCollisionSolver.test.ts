@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import { SelfCollisionSolver } from "../src/SelfCollisionSolver.js";
 
+import {
+  segmentSegmentDistanceSquared,
+  type SegmentSegmentResult,
+} from "../src/SegmentSegmentDistance.js";
+
 describe("SelfCollisionSolver", () => {
   it("detects and resolves a vertex penetrating a pinned triangle", () => {
     const positions = new Float32Array([
@@ -222,7 +227,7 @@ describe("SelfCollisionSolver", () => {
     expect(Array.from(positions)).toEqual(Array.from(before));
   });
 
-  it("misses an edge-edge intersection when no vertex is within collision thickness", () => {
+  it("detects and resolves an edge-edge intersection when no vertex is within collision thickness", () => {
     const positions = new Float32Array([
       /**
        * Triangle 1, lying on z = 0.
@@ -303,10 +308,62 @@ describe("SelfCollisionSolver", () => {
      * no contact primitive capable of representing
      * this intersection.
      */
+    /**
+     * Vertex-triangle collision still sees nothing.
+     */
     expect(stats.contacts).toBe(0);
-
     expect(stats.resolvedContacts).toBe(0);
 
-    expect(Array.from(positions)).toEqual(Array.from(before));
+    /**
+     * Edge-edge collision must detect and resolve
+     * the intersection.
+     */
+    expect(stats.edgeContacts).toBeGreaterThan(0);
+
+    expect(stats.edgeResolvedContacts).toBeGreaterThan(0);
+
+    expect(Array.from(positions)).not.toEqual(Array.from(before));
+
+    /**
+     * Verify specifically that the originally
+     * intersecting edges A-B and D-E are now
+     * separated by one collision thickness.
+     */
+    const result: SegmentSegmentResult = {
+      distanceSquared: 0,
+
+      closestAX: 0,
+      closestAY: 0,
+      closestAZ: 0,
+
+      closestBX: 0,
+      closestBY: 0,
+      closestBZ: 0,
+
+      parameterA: 0,
+      parameterB: 0,
+    };
+
+    segmentSegmentDistanceSquared(
+      positions[0],
+      positions[1],
+      positions[2],
+
+      positions[3],
+      positions[4],
+      positions[5],
+
+      positions[9],
+      positions[10],
+      positions[11],
+
+      positions[12],
+      positions[13],
+      positions[14],
+
+      result,
+    );
+
+    expect(Math.sqrt(result.distanceSquared)).toBeCloseTo(0.05, 5);
   });
 });
