@@ -772,6 +772,20 @@ exportRecordingButton.textContent = "Export JSON";
 
 exportRecordingButton.disabled = true;
 
+const importRecordingButton = document.createElement("button");
+
+importRecordingButton.type = "button";
+
+importRecordingButton.textContent = "Import JSON";
+
+const importRecordingInput = document.createElement("input");
+
+importRecordingInput.type = "file";
+
+importRecordingInput.accept = ".json,application/json";
+
+importRecordingInput.hidden = true;
+
 const replayRecordingButton = document.createElement("button");
 
 replayRecordingButton.type = "button";
@@ -863,6 +877,8 @@ recordingSection.append(
   startRecordingButton,
   stopRecordingButton,
   exportRecordingButton,
+  importRecordingButton,
+  importRecordingInput,
   replayRecordingButton,
   recordingStatus,
 );
@@ -929,6 +945,82 @@ exportRecordingButton.addEventListener("click", () => {
   link.click();
 
   URL.revokeObjectURL(url);
+});
+
+importRecordingButton.addEventListener("click", () => {
+  importRecordingInput.click();
+});
+
+importRecordingInput.addEventListener("change", async () => {
+  const file = importRecordingInput.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  try {
+    const json = await file.text();
+
+    const parsed: unknown = JSON.parse(json);
+
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("version" in parsed) ||
+      parsed.version !== 1 ||
+      !("configuration" in parsed) ||
+      !("initialPositions" in parsed) ||
+      !Array.isArray(parsed.initialPositions) ||
+      !("initialPreviousPositions" in parsed) ||
+      !Array.isArray(parsed.initialPreviousPositions) ||
+      !("initialInverseMasses" in parsed) ||
+      !Array.isArray(parsed.initialInverseMasses) ||
+      !("events" in parsed) ||
+      !Array.isArray(parsed.events)
+    ) {
+      throw new Error("Invalid SoftSurface scenario.");
+    }
+
+    scenarioRecorder.stop();
+
+    scenarioReplay = null;
+
+    recordedScenario = parsed as RecordedScenario;
+
+    exportRecordingButton.disabled = false;
+
+    replayRecordingButton.disabled = false;
+
+    startRecordingButton.disabled = false;
+
+    startRecordingButton.textContent = "Start recording";
+
+    stopRecordingButton.disabled = true;
+
+    const events = recordedScenario.events;
+
+    const firstEvent = events[0];
+
+    const lastEvent = events[events.length - 1];
+
+    recordingStatus.textContent = [
+      "Scenario imported",
+      `Events: ${events.length}`,
+      `First step: ${firstEvent?.step ?? "--"}`,
+      `Last step: ${lastEvent?.step ?? "--"}`,
+    ].join("\n");
+
+    console.log("[scenario] imported", recordedScenario);
+  } catch (error) {
+    console.error("[scenario] import failed", error);
+
+    recordingStatus.textContent = "Scenario import failed";
+  } finally {
+    /**
+     * Allows selecting the same file again.
+     */
+    importRecordingInput.value = "";
+  }
 });
 
 replayRecordingButton.addEventListener("click", () => {
